@@ -58,7 +58,12 @@ pub static enclosing_size: Option<EnclosingSizeFn> = Some(crate::enclosing_size_
 #[cfg(not(feature = "allocation-tracking"))]
 pub static enclosing_size: Option<EnclosingSizeFn> = None;
 
-#[cfg(not(any(windows, feature = "use-system-allocator", target_env = "ohos")))]
+#[cfg(not(any(
+    windows,
+    feature = "use-system-allocator",
+    target_env = "ohos",
+    target_family = "wasm"
+)))]
 mod platform {
     use std::ffi::CStr;
     use std::mem::size_of_val;
@@ -149,6 +154,7 @@ mod platform {
 
 #[cfg(all(
     not(windows),
+    not(target_family = "wasm"),
     any(feature = "use-system-allocator", target_env = "ohos")
 ))]
 mod platform {
@@ -176,6 +182,37 @@ mod platform {
             crate::ALLOC.note_allocation(ptr, size);
             size
         }
+    }
+
+    pub mod libc_compat {
+        pub use libc::{free, malloc, realloc};
+    }
+
+    pub fn heap_reports() -> Vec<crate::HeapReport> {
+        Vec::new()
+    }
+}
+
+/// wasm32-wasip2.
+///
+/// jemalloc has no wasm support (its build script hard-errors on the target), and
+/// wasi-libc exposes no `malloc_usable_size`, so heap introspection is
+/// unavailable. Rust's `System` allocator over wasi-libc is used instead, and the
+/// introspection APIs answer with values rather than panicking — a wasm guest is
+/// memory-profiled from the host side, not from inside.
+#[cfg(target_family = "wasm")]
+mod platform {
+    pub use std::alloc::System as Allocator;
+    use std::os::raw::c_void;
+
+    /// Always 0: wasi-libc has no `malloc_usable_size`, and there is no portable
+    /// way to recover an allocation's size from its pointer under wasm.
+    ///
+    /// # Safety
+    ///
+    /// No restrictions — the pointer is never dereferenced.
+    pub unsafe extern "C" fn usable_size(_ptr: *const c_void) -> usize {
+        0
     }
 
     pub mod libc_compat {
