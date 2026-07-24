@@ -29,6 +29,8 @@ linker = "lld-link.exe"
 linker = "lld-link.exe"
 
 [env]
+# mozjs_sys builds SpiderMonkey from source for wasm32 and requires this.
+WASI_SDK_PATH = "/opt/wasi-sdk"
 CC_wasm32-wasip2 = "/opt/wasi-sdk/bin/clang"
 CXX_wasm32-wasip2 = "/opt/wasi-sdk/bin/clang++"
 AR_wasm32-wasip2 = "/opt/wasi-sdk/bin/llvm-ar"

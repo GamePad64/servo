@@ -445,6 +445,14 @@ codegen-units = 1
 # The vendored copy is byte-identical to the crates.io release apart from the
 # added platform/wasm module.
 wr_glyph_rasterizer = { path = "third_party/wr_glyph_rasterizer" }
+# wasip2 port: surfman has no wasm backend (no display server, no GL driver,
+# no wasi-gpu). Vendored with a null backend so the crate compiles; it never
+# opens a device. The port rasterizes on the CPU via vello_cpu instead.
+surfman = { path = "third_party/surfman" }
+# wasip2 port: upstream cfg bug — `impl Imsz for Stdin` delegates to
+# `impl Imsz for &Stdin`, which is gated to unix/windows only, so the call
+# resolves back to itself on wasm. One-line cfg fix.
+imsz = { path = "third_party/imsz" }
 
 # For WebRender:
 #
