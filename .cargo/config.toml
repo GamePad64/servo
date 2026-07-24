@@ -29,8 +29,26 @@ linker = "lld-link.exe"
 linker = "lld-link.exe"
 
 [env]
+CC_wasm32-wasip2 = "/opt/wasi-sdk/bin/clang"
+CXX_wasm32-wasip2 = "/opt/wasi-sdk/bin/clang++"
+AR_wasm32-wasip2 = "/opt/wasi-sdk/bin/llvm-ar"
+CFLAGS_wasm32-wasip2 = "--sysroot=/opt/wasi-sdk/share/wasi-sysroot -mllvm -wasm-enable-sjlj -fwasm-exceptions"
+CXXFLAGS_wasm32-wasip2 = "--sysroot=/opt/wasi-sdk/share/wasi-sysroot -mllvm -wasm-enable-sjlj -fwasm-exceptions"
 MACOSX_DEPLOYMENT_TARGET = "13.0"
 RUSTC_BOOTSTRAP = "crown,script,script_webgpu,script_bindings,style_tests,mozjs,mozjs_sys"
 
 [build]
 rustdocflags = ["--document-private-items"]
+
+# --- wasm32-wasip2 port (branch wasip2-port) ---
+# noeh libc++ + the wasi-sysroot -L are what make SpiderMonkey link;
+# -mllvm -wasm-enable-sjlj -fwasm-exceptions is what makes C libraries
+# using setjmp/longjmp compile. tokio on wasip2 needs --cfg tokio_unstable.
+[target.wasm32-wasip2]
+rustflags = [
+  "--cfg", "tokio_unstable",
+  "-L", "/opt/wasi-sdk/share/wasi-sysroot/lib/wasm32-wasip2",
+  "-L", "/opt/wasi-sdk/share/wasi-sysroot/lib/wasm32-wasip2/noeh",
+  "-C", "link-arg=-lc++",
+  "-C", "link-arg=-lc++abi",
+]
