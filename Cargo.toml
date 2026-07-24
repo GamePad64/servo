@@ -439,6 +439,13 @@ codegen-units = 1
 # web_atoms = { path = "../html5ever/web_atoms" }
 # xml5ever = { path = "../html5ever/xml5ever" }
 #
+# wasip2 port: wr_glyph_rasterizer 0.70.0 vendored under third_party/ with a
+# wasm font backend added. WebRender matches no font backend when
+# target_family = "wasm" (its `unix` arm is false), which is a compile error.
+# The vendored copy is byte-identical to the crates.io release apart from the
+# added platform/wasm module.
+wr_glyph_rasterizer = { path = "third_party/wr_glyph_rasterizer" }
+
 # For WebRender:
 #
 # webrender = { path = "../webrender/webrender" }
