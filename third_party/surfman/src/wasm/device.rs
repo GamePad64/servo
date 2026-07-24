@@ -65,7 +65,7 @@ impl DeviceInterface for Device {
     }
 
     fn create_context(
-        &mut self,
+        &self,
         _descriptor: &ContextDescriptor,
         _share_with: Option<&Context>,
     ) -> Result<Context, Error> {
@@ -137,7 +137,7 @@ impl DeviceInterface for Device {
     }
 
     fn create_surface(
-        &mut self,
+        &self,
         _context: &Context,
         _surface_access: SurfaceAccess,
         _surface_type: SurfaceType<NativeWidget>,

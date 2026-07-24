@@ -87,6 +87,25 @@ mod platform {
     }
 }
 
+/// wasm32-wasip2.
+///
+/// The "cross-process" part is vacuous here: a wasm component is a single
+/// process and cannot spawn another, so a process-local monotonic clock carries
+/// exactly the same meaning. `std::time::Instant` is backed by
+/// `wasi:clocks/monotonic-clock`, which every component may use without a
+/// capability grant.
+#[cfg(target_family = "wasm")]
+mod platform {
+    use std::sync::LazyLock;
+    use std::time::Instant;
+
+    static ORIGIN: LazyLock<Instant> = LazyLock::new(Instant::now);
+
+    pub(super) fn now() -> u64 {
+        ORIGIN.elapsed().as_nanos() as u64
+    }
+}
+
 #[cfg(any(target_os = "macos", target_os = "ios"))]
 mod platform {
     use std::sync::LazyLock;
