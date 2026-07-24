@@ -184,4 +184,7 @@ xpath = { workspace = true }
 zeroize = { workspace = true }
 
 [target.'cfg(not(target_os = "ios"))'.dependencies]
+
+# wasip2 port: ANGLE validates WebGL shaders; WebGL is disabled in the headless wasm build.
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
 mozangle = { workspace = true }

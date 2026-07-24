@@ -102,7 +102,6 @@ layout = { workspace = true }
 layout_api = { workspace = true }
 log = { workspace = true }
 media = { workspace = true }
-mozangle = { workspace = true }
 net = { workspace = true }
 net_traits = { workspace = true }
 paint = { workspace = true }
@@ -157,7 +156,6 @@ arboard = { workspace = true, optional = true }
 webxr = { workspace = true, optional = true, features = ["glwindow", "headless"] }
 
 [target.'cfg(all(not(target_os = "windows"), not(target_os = "ios"), not(target_os = "android"), not(target_env = "ohos"), not(target_arch = "arm"), not(target_arch = "aarch64"), not(target_arch="riscv32"), not(target_arch="riscv64")))'.dependencies]
-gaol = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 webxr = { workspace = true, optional = true, features = ["glwindow", "headless", "openxr-api"] }
@@ -183,3 +181,10 @@ winit = { workspace = true }
 [[test]]
 name = "multiprocess"
 harness = false
+
+# wasip2 port: neither survives in a wasm guest.
+#   gaol    — OS process sandboxing; there is one process and the wasm sandbox is the boundary.
+#   mozangle — ANGLE shader validation for WebGL, which the headless build disables.
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+gaol = { workspace = true }
+mozangle = { workspace = true }

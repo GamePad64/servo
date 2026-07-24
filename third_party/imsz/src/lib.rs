@@ -633,6 +633,7 @@ impl Imsz for std::fs::File {
     }
 }
 
+#[cfg(any(target_family="unix", target_family="windows"))]
 impl Imsz for std::io::Stdin {
     #[inline]
     fn imsz(self) -> ImResult<ImInfo> {
@@ -640,7 +641,7 @@ impl Imsz for std::io::Stdin {
     }
 }
 
-#[cfg(any(target_family="unix", target_family="windows", target_family="wasm"))]
+#[cfg(any(target_family="unix", target_family="windows"))]
 impl Imsz for &std::io::Stdin {
     /// WARNING: This looses already buffered input!
     #[inline]
