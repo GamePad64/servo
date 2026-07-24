@@ -21,10 +21,16 @@ backtrace = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
 rustc-hash = { workspace = true, optional = true }
 
-[target.'cfg(not(any(windows, target_env = "ohos")))'.dependencies]
+[target.'cfg(not(any(windows, target_env = "ohos", target_family = "wasm")))'.dependencies]
 libc = { workspace = true, optional = true }
 tikv-jemalloc-sys = { workspace = true }
 tikv-jemallocator = { workspace = true }
+
+# wasm32-wasip2: jemalloc has no wasm support — its build script hard-errors with
+# "jemalloc does not support target: wasm32-wasip2" — so the guest uses Rust's
+# System allocator over wasi-libc.
+[target.'cfg(target_family = "wasm")'.dependencies]
+libc = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = ["Win32_System_Memory"] }
