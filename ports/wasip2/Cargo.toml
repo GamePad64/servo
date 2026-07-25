@@ -1,0 +1,18 @@
+[package]
+name = "wasip2-shell"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+publish = false
+rust-version.workspace = true
+
+[dependencies]
+# The embedding library is the `servo` package (not `libservo` — that is only how
+# the project refers to it in prose). js_jit selects the prebuilt SpiderMonkey
+# archive; it does not enable machine-code generation, which wasm cannot do.
+servo = { path = "../../components/servo", default-features = false, features = ["js_jit"] }
+tokio = { version = "1.51", features = ["rt", "time", "macros"] }
+
+[profile.release]
+opt-level = "s"
