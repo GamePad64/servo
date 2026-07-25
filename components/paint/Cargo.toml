@@ -66,3 +66,7 @@ surfman = { workspace = true }
 # disabled in the headless wasm build.
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 webgl = { workspace = true }
+
+# wasip2 port: the timer scheduler runs as a LocalSet task, not an OS thread.
+[target.'cfg(target_family = "wasm")'.dependencies]
+tokio = { workspace = true, features = ["rt", "time"] }

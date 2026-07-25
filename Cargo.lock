@@ -8823,6 +8823,7 @@ dependencies = [
  "smallvec",
  "stylo_traits",
  "surfman",
+ "tokio",
  "tracing",
  "webrender",
  "webrender_api",
