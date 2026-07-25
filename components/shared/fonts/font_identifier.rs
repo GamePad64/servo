@@ -91,6 +91,71 @@ mod platform {
     }
 }
 
+/// wasm32-wasip2.
+///
+/// Structurally the same as the FreeType identifier — a path plus face and
+/// named-instance indexes — because WASI does have a filesystem: fonts reach the
+/// guest through a preopened directory or are embedded in the component itself.
+/// The one difference is that the data is read with `std::fs::read` rather than
+/// mapped, since `memmap2` has no WASI backend.
+#[cfg(target_family = "wasm")]
+mod platform {
+    use std::path::{Path, PathBuf};
+
+    use malloc_size_of_derive::MallocSizeOf;
+    use serde::{Deserialize, Serialize};
+    use style::Atom;
+    use webrender_api::NativeFontHandle;
+
+    use crate::{FontData, FontDataAndIndex};
+
+    /// An identifier for a font reachable through the guest's filesystem.
+    #[derive(Clone, Debug, Deserialize, Eq, Hash, MallocSizeOf, PartialEq, Serialize)]
+    pub struct LocalFontIdentifier {
+        /// The path to the font.
+        pub path: Atom,
+        /// The variation index within the font.
+        pub face_index: u16,
+        /// The index of the named instance within the font.
+        ///
+        /// For non-variable fonts, this is ignored.
+        pub named_instance_index: u16,
+    }
+
+    impl LocalFontIdentifier {
+        pub fn index(&self) -> u32 {
+            self.face_index as u32
+        }
+
+        pub fn named_instance_index(&self) -> u32 {
+            self.named_instance_index as u32
+        }
+
+        pub fn native_font_handle(&self) -> NativeFontHandle {
+            NativeFontHandle {
+                path: PathBuf::from(&*self.path),
+                index: self.face_index as u32,
+            }
+        }
+
+        pub fn font_data_and_index(&self) -> Option<FontDataAndIndex> {
+            // No mmap under WASI: read the whole face. Font files are small
+            // relative to a component's memory budget.
+            let bytes = std::fs::read(Path::new(&*self.path)).ok()?;
+            Some(FontDataAndIndex {
+                data: FontData::from_bytes(&bytes),
+                index: self.face_index as u32,
+            })
+        }
+
+        /// Fontconfig and FreeType pack the named-instance index into the high
+        /// 16 bits and the face index into the low 16.
+        pub fn face_index_for_freetype(&self) -> u32 {
+            ((self.named_instance_index()) << 16) | self.index()
+        }
+    }
+}
+
 #[cfg(target_os = "macos")]
 mod platform {
     use std::fs::File;
