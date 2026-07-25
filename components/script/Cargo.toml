@@ -188,3 +188,7 @@ zeroize = { workspace = true }
 # wasip2 port: ANGLE validates WebGL shaders; WebGL is disabled in the headless wasm build.
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 mozangle = { workspace = true }
+
+# wasip2 port: the script thread runs as a LocalSet task, not an OS thread.
+[target.'cfg(target_family = "wasm")'.dependencies]
+tokio = { workspace = true, features = ["rt"] }
