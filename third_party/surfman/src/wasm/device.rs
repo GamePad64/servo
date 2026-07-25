@@ -207,3 +207,184 @@ impl DeviceInterface for Device {
         None
     }
 }
+
+/// Inherent methods mirroring `DeviceInterface`.
+///
+/// The native backends expose these directly on `Device`, and Servo calls them
+/// without importing the trait, so a trait-only implementation does not satisfy
+/// its call sites.
+impl Device {
+    pub fn native_device(&self) -> NativeDevice {
+        NativeDevice
+    }
+
+    pub fn connection(&self) -> Connection {
+        Connection
+    }
+
+    pub fn adapter(&self) -> Adapter {
+        Adapter
+    }
+
+    pub fn gl_api(&self) -> GLApi {
+        GLApi::GLES
+    }
+
+    pub fn create_context_descriptor(
+        &self,
+        attributes: &ContextAttributes,
+    ) -> Result<ContextDescriptor, Error> {
+        Ok(ContextDescriptor {
+            attributes: *attributes,
+        })
+    }
+
+    pub fn create_context(
+        &self,
+        _descriptor: &ContextDescriptor,
+        _share_with: Option<&Context>,
+    ) -> Result<Context, Error> {
+        Err(Error::UnsupportedOnThisPlatform)
+    }
+
+    /// # Safety
+    ///
+    /// No restrictions: there is no native context to misuse.
+    pub unsafe fn create_context_from_native_context(
+        &self,
+        _native_context: NativeContext,
+    ) -> Result<Context, Error> {
+        Err(Error::UnsupportedOnThisPlatform)
+    }
+
+    pub fn destroy_context(&self, _context: &mut Context) -> Result<(), Error> {
+        Ok(())
+    }
+
+    pub fn context_descriptor(&self, _context: &Context) -> ContextDescriptor {
+        ContextDescriptor {
+            attributes: ContextAttributes::zeroed(),
+        }
+    }
+
+    pub fn make_context_current(&self, _context: &Context) -> Result<(), Error> {
+        Err(Error::UnsupportedOnThisPlatform)
+    }
+
+    pub fn make_no_context_current(&self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    pub fn context_descriptor_attributes(
+        &self,
+        context_descriptor: &ContextDescriptor,
+    ) -> ContextAttributes {
+        context_descriptor.attributes
+    }
+
+    pub fn get_proc_address(&self, _context: &Context, _symbol_name: &str) -> *const c_void {
+        std::ptr::null()
+    }
+
+    pub fn bind_surface_to_context(
+        &self,
+        _context: &mut Context,
+        surface: Surface,
+    ) -> Result<(), (Error, Surface)> {
+        Err((Error::UnsupportedOnThisPlatform, surface))
+    }
+
+    pub fn unbind_surface_from_context(
+        &self,
+        _context: &mut Context,
+    ) -> Result<Option<Surface>, Error> {
+        Ok(None)
+    }
+
+    pub fn context_id(&self, context: &Context) -> ContextID {
+        context.id
+    }
+
+    pub fn context_surface_info(&self, _context: &Context) -> Result<Option<SurfaceInfo>, Error> {
+        Ok(None)
+    }
+
+    pub fn native_context(&self, _context: &Context) -> NativeContext {
+        NativeContext
+    }
+
+    pub fn create_surface(
+        &self,
+        _context: &Context,
+        _surface_access: SurfaceAccess,
+        _surface_type: SurfaceType<NativeWidget>,
+    ) -> Result<Surface, Error> {
+        Err(Error::UnsupportedOnThisPlatform)
+    }
+
+    pub fn create_surface_texture(
+        &self,
+        _context: &mut Context,
+        surface: Surface,
+    ) -> Result<SurfaceTexture, (Error, Surface)> {
+        Err((Error::UnsupportedOnThisPlatform, surface))
+    }
+
+    pub fn destroy_surface(
+        &self,
+        _context: &mut Context,
+        _surface: &mut Surface,
+    ) -> Result<(), Error> {
+        Ok(())
+    }
+
+    pub fn destroy_surface_texture(
+        &self,
+        _context: &mut Context,
+        surface_texture: SurfaceTexture,
+    ) -> Result<Surface, (Error, SurfaceTexture)> {
+        Ok(surface_texture.surface)
+    }
+
+    pub fn surface_gl_texture_target(&self) -> u32 {
+        0
+    }
+
+    pub fn present_bound_surface(&self, _context: &mut Context) -> Result<(), Error> {
+        Err(Error::UnsupportedOnThisPlatform)
+    }
+
+    pub fn present_surface(&self, _context: &Context, _surface: &mut Surface) -> Result<(), Error> {
+        Err(Error::UnsupportedOnThisPlatform)
+    }
+
+    pub fn resize_bound_surface(
+        &self,
+        _context: &mut Context,
+        _size: Size2D<i32>,
+    ) -> Result<(), Error> {
+        Err(Error::UnsupportedOnThisPlatform)
+    }
+
+    pub fn resize_surface(
+        &self,
+        _context: &Context,
+        _surface: &mut Surface,
+        _size: Size2D<i32>,
+    ) -> Result<(), Error> {
+        Err(Error::UnsupportedOnThisPlatform)
+    }
+
+    pub fn surface_info(&self, surface: &Surface) -> SurfaceInfo {
+        SurfaceInfo {
+            size: surface.size,
+            id: crate::SurfaceID(0),
+            context_id: surface.context_id,
+            framebuffer_object: None,
+        }
+    }
+
+    pub fn surface_texture_object(&self, _surface_texture: &SurfaceTexture) -> Option<Texture> {
+        None
+    }
+}
