@@ -5,6 +5,7 @@
 use std::borrow::ToOwned;
 use std::cell::OnceCell;
 use std::collections::HashMap;
+use std::ops::ControlFlow;
 use std::thread;
 
 use app_units::Au;
@@ -86,6 +87,7 @@ impl SystemFontService {
         let (sender, receiver) = generic_channel::channel().unwrap();
         let memory_reporter_sender = sender.clone();
 
+        #[cfg(not(target_family = "wasm"))]
         thread::Builder::new()
             .name("SystemFontService".to_owned())
             .spawn(move || {
@@ -111,15 +113,61 @@ impl SystemFontService {
             })
             .expect("Thread spawning failed");
 
+        // wasip2: `thread::spawn` fails at run time (os error 58), so the service
+        // runs as a task on the caller's LocalSet instead. It must be a
+        // LocalSet task rather than `tokio::spawn` because the font service is
+        // not `Send`.
+        #[cfg(target_family = "wasm")]
+        tokio::task::spawn_local(async move {
+            let mut cache = SystemFontService {
+                port: receiver,
+                local_families: Default::default(),
+                paint_api,
+                webrender_fonts: HashMap::new(),
+                font_instances: HashMap::new(),
+                generic_fonts: Default::default(),
+                free_font_keys: Default::default(),
+                free_font_instance_keys: Default::default(),
+            };
+
+            cache.refresh_local_families();
+
+            // `run_with_memory_reporting` takes an `FnOnce()`, which cannot hold
+            // the registration across an await point, so the registration is
+            // made directly here.
+            let _registration = memory_profiler_sender.prepare_memory_reporting(
+                "system-fonts".to_owned(),
+                memory_reporter_sender,
+                SystemFontServiceMessage::CollectMemoryReport,
+            );
+            cache.run_async().await;
+        });
+
         SystemFontServiceProxySender(sender)
     }
 
-    fn run(&mut self) {
+    /// wasip2: the same loop, awaiting instead of blocking. A blocking `recv()`
+    /// here would stall the single-threaded runtime that every other Servo actor
+    /// also lives on.
+    #[cfg(target_family = "wasm")]
+    async fn run_async(&mut self) {
         loop {
-            let msg = self.port.recv().unwrap();
+            let Ok(msg) = self.port.recv_async().await else {
+                // Disconnected: the proxy is gone, so the service is done.
+                return;
+            };
 
-            let _span = profile_traits::trace_span!("SystemFontServiceMessage").entered();
-            match msg {
+            if self.handle_message(msg) == ControlFlow::Break(()) {
+                break;
+            }
+        }
+    }
+
+    /// Handle one message. Shared by the native thread loop and the wasm task
+    /// loop so the two cannot drift apart.
+    fn handle_message(&mut self, msg: SystemFontServiceMessage) -> ControlFlow<()> {
+        let _span = profile_traits::trace_span!("SystemFontServiceMessage").entered();
+        match msg {
                 SystemFontServiceMessage::GetFontTemplates(
                     font_descriptor,
                     font_family,
@@ -170,8 +218,18 @@ impl SystemFontService {
                 SystemFontServiceMessage::Ping => (),
                 SystemFontServiceMessage::Exit(result) => {
                     let _ = result.send(());
-                    break;
+                    return ControlFlow::Break(());
                 },
+        }
+        ControlFlow::Continue(())
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    fn run(&mut self) {
+        loop {
+            let msg = self.port.recv().unwrap();
+            if self.handle_message(msg) == ControlFlow::Break(()) {
+                break;
             }
         }
     }
