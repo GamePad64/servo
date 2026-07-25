@@ -8,9 +8,15 @@ use std::num::{NonZeroU32, NonZeroU64};
 use std::ops::Deref;
 
 use euclid::default::{Rect, Size2D};
+use glow::{self as gl};
+// wasip2 port: glow's Native* types are tuple structs over NonZeroU32 on the
+// native backend only; under wasm glow compiles its web backend, where these are
+// opaque slotmap keys with no `.0`. The WebGL*Id types below stay — script's
+// WebGL DOM refers to them — but the glow conversions are native-only.
+#[cfg(not(target_family = "wasm"))]
 use glow::{
-    self as gl, NativeBuffer, NativeFence, NativeFramebuffer, NativeProgram, NativeQuery,
-    NativeRenderbuffer, NativeSampler, NativeShader, NativeTexture, NativeVertexArray,
+    NativeBuffer, NativeFence, NativeFramebuffer, NativeProgram, NativeQuery, NativeRenderbuffer,
+    NativeSampler, NativeShader, NativeTexture, NativeVertexArray,
 };
 use log::warn;
 use malloc_size_of_derive::MallocSizeOf;
@@ -693,6 +699,7 @@ macro_rules! define_resource_id {
         }
     };
     ($name:ident, $type:tt, $glow:tt) => {
+        #[cfg(not(target_family = "wasm"))]
         impl $name {
             #[inline]
             pub fn glow(self) -> $glow {
@@ -717,6 +724,7 @@ define_resource_id!(WebGLQueryId, u32, NativeQuery);
 define_resource_id!(WebGLSamplerId, u32, NativeSampler);
 define_resource_id!(WebGLShaderId, u32, NativeShader);
 define_resource_id!(WebGLSyncId, u64);
+#[cfg(not(target_family = "wasm"))]
 impl WebGLSyncId {
     #[inline]
     pub fn glow(&self) -> NativeFence {

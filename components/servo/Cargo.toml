@@ -136,7 +136,6 @@ surfman = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true, optional = true }
 url = { workspace = true }
-webgl = { workspace = true, default-features = false }
 webgpu = { workspace = true, optional = true }
 webrender = { workspace = true }
 webrender_api = { workspace = true }
@@ -188,3 +187,4 @@ harness = false
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 gaol = { workspace = true }
 mozangle = { workspace = true }
+webgl = { workspace = true, default-features = false }
