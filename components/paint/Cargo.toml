@@ -51,7 +51,6 @@ stylo_traits = { workspace = true }
 surfman = { workspace = true }
 timers = { workspace = true }
 tracing = { workspace = true, optional = true }
-webgl = { workspace = true }
 webgpu = { workspace = true, optional = true }
 webrender = { workspace = true }
 webrender_api = { workspace = true }
@@ -61,3 +60,9 @@ wr_malloc_size_of = { workspace = true }
 
 [dev-dependencies]
 surfman = { workspace = true }
+
+# wasip2 port: the WebGL implementation is GL-native throughout (it calls
+# WebGL*Id::glow(), which only exists on glow's native backend). WebGL is
+# disabled in the headless wasm build.
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+webgl = { workspace = true }

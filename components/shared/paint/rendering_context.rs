@@ -13,12 +13,16 @@ use dpi::PhysicalSize;
 use embedder_traits::RefreshDriver;
 use euclid::default::{Rect, Size2D as UntypedSize2D};
 use euclid::{Point2D, Size2D};
+#[cfg(not(target_family = "wasm"))]
 use gleam::gl::{self, Gl};
+#[cfg(not(target_family = "wasm"))]
 use glow::{HasContext, NativeFramebuffer};
 use image::RgbaImage;
 use log::{debug, trace, warn};
+#[cfg(not(target_family = "wasm"))]
 use raw_window_handle::{DisplayHandle, WindowHandle};
 pub use surfman::Error;
+#[cfg(not(target_family = "wasm"))]
 use surfman::chains::{PreserveBuffer, SwapChain};
 use surfman::{
     Adapter, Connection, Context, ContextAttributeFlags, ContextAttributes, Device, GLApi,
@@ -95,6 +99,12 @@ pub trait RenderingContext {
 /// The `SurfmanRenderingContext` struct encapsulates the necessary data and methods
 /// to interact with the Surfman library, including creating surfaces, binding surfaces,
 /// resizing surfaces, presenting rendered frames, and managing the OpenGL context state.
+// wasip2 port: everything below is an OpenGL implementation over surfman.
+// A wasm guest has no GL of any kind, so only the `RenderingContext` trait
+// survives — that is all `components/paint` and most of `components/servo`
+// actually consume. The concrete contexts are gated out wholesale rather
+// than stubbed: nothing in a headless build constructs one.
+#[cfg(not(target_family = "wasm"))]
 struct SurfmanRenderingContext {
     gleam_gl: Rc<dyn Gl>,
     glow_gl: Arc<glow::Context>,
@@ -103,6 +113,7 @@ struct SurfmanRenderingContext {
     refresh_driver: Option<Rc<dyn RefreshDriver>>,
 }
 
+#[cfg(not(target_family = "wasm"))]
 impl Drop for SurfmanRenderingContext {
     fn drop(&mut self) {
         let device = &mut self.device.borrow_mut();
@@ -111,6 +122,7 @@ impl Drop for SurfmanRenderingContext {
     }
 }
 
+#[cfg(not(target_family = "wasm"))]
 impl SurfmanRenderingContext {
     fn new(
         connection: &Connection,
@@ -286,12 +298,14 @@ impl SurfmanRenderingContext {
 /// it is more convenient to have consistent, but slower display output.
 ///
 /// The results of the render can be accessed via [`RenderingContext::read_to_image`].
+#[cfg(not(target_family = "wasm"))]
 pub struct SoftwareRenderingContext {
     size: Cell<PhysicalSize<u32>>,
     surfman_rendering_info: SurfmanRenderingContext,
     swap_chain: SwapChain<Device>,
 }
 
+#[cfg(not(target_family = "wasm"))]
 impl SoftwareRenderingContext {
     pub fn new(size: PhysicalSize<u32>) -> Result<Self, Error> {
         if size.width == 0 || size.height == 0 {
@@ -320,6 +334,7 @@ impl SoftwareRenderingContext {
     }
 }
 
+#[cfg(not(target_family = "wasm"))]
 impl Drop for SoftwareRenderingContext {
     fn drop(&mut self) {
         let device = &mut self.surfman_rendering_info.device.borrow_mut();
@@ -328,6 +343,7 @@ impl Drop for SoftwareRenderingContext {
     }
 }
 
+#[cfg(not(target_family = "wasm"))]
 impl RenderingContext for SoftwareRenderingContext {
     fn prepare_for_rendering(&self) {
         self.surfman_rendering_info.prepare_for_rendering();
@@ -404,12 +420,14 @@ impl RenderingContext for SoftwareRenderingContext {
 ///
 /// If you would like to paint to only a portion of the window, consider using
 /// [`OffscreenRenderingContext`] by calling [`WindowRenderingContext::offscreen_context`].
+#[cfg(not(target_family = "wasm"))]
 pub struct WindowRenderingContext {
     /// The inner size of the window in physical pixels which excludes OS decorations.
     size: Cell<PhysicalSize<u32>>,
     surfman_context: SurfmanRenderingContext,
 }
 
+#[cfg(not(target_family = "wasm"))]
 impl WindowRenderingContext {
     pub fn new(
         display_handle: DisplayHandle,
@@ -528,6 +546,7 @@ impl WindowRenderingContext {
     }
 }
 
+#[cfg(not(target_family = "wasm"))]
 impl RenderingContext for WindowRenderingContext {
     fn prepare_for_rendering(&self) {
         self.surfman_context.prepare_for_rendering();
@@ -587,6 +606,7 @@ impl RenderingContext for WindowRenderingContext {
     }
 }
 
+#[cfg(not(target_family = "wasm"))]
 struct Framebuffer {
     gl: Rc<dyn Gl>,
     framebuffer_id: gl::GLuint,
@@ -594,6 +614,7 @@ struct Framebuffer {
     texture_id: gl::GLuint,
 }
 
+#[cfg(not(target_family = "wasm"))]
 impl Framebuffer {
     fn bind(&self) {
         trace!("Binding FBO {}", self.framebuffer_id);
@@ -602,6 +623,7 @@ impl Framebuffer {
     }
 }
 
+#[cfg(not(target_family = "wasm"))]
 impl Drop for Framebuffer {
     fn drop(&mut self) {
         self.gl.bind_framebuffer(gl::FRAMEBUFFER, 0);
@@ -611,6 +633,7 @@ impl Drop for Framebuffer {
     }
 }
 
+#[cfg(not(target_family = "wasm"))]
 impl Framebuffer {
     fn new(gl: Rc<dyn Gl>, size: PhysicalSize<u32>) -> Self {
         let framebuffer_ids = gl.gen_framebuffers(1);
@@ -729,6 +752,7 @@ impl Framebuffer {
     }
 }
 
+#[cfg(not(target_family = "wasm"))]
 pub struct OffscreenRenderingContext {
     parent_context: Rc<WindowRenderingContext>,
     size: Cell<PhysicalSize<u32>>,
@@ -737,6 +761,7 @@ pub struct OffscreenRenderingContext {
 
 type RenderToParentCallback = Box<dyn Fn(&glow::Context, Rect<i32>) + Send + Sync>;
 
+#[cfg(not(target_family = "wasm"))]
 impl OffscreenRenderingContext {
     fn new(parent_context: Rc<WindowRenderingContext>, size: PhysicalSize<u32>) -> Self {
         assert!(
@@ -815,6 +840,7 @@ impl OffscreenRenderingContext {
     }
 }
 
+#[cfg(not(target_family = "wasm"))]
 impl RenderingContext for OffscreenRenderingContext {
     fn size(&self) -> PhysicalSize<u32> {
         self.size.get()
@@ -903,6 +929,7 @@ impl RenderingContext for OffscreenRenderingContext {
     }
 }
 
+#[cfg(not(target_family = "wasm"))]
 fn print_diagnostics_information_on_context_creation_failure(
     device: &Device,
     desired_api: GLApi,
