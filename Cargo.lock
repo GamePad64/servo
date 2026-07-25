@@ -8036,6 +8036,7 @@ dependencies = [
  "servo-webxr-api",
  "stylo",
  "stylo_traits",
+ "tokio",
  "tracing",
 ]
 
