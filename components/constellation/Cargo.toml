@@ -72,3 +72,7 @@ webxr-api = { workspace = true }
 # wasip2 port: OS process sandboxing is meaningless in a wasm guest — there is one process and the wasm sandbox is the boundary.
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 gaol = { workspace = true }
+
+# wasip2 port: the constellation runs as a LocalSet task, not an OS thread.
+[target.'cfg(target_family = "wasm")'.dependencies]
+tokio = { workspace = true, features = ["rt"] }
