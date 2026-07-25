@@ -98,3 +98,7 @@ winapi = { workspace = true }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ohos_mock)'] }
+
+# wasip2 port: the system font service runs as a LocalSet task, not an OS thread.
+[target.'cfg(target_family = "wasm")'.dependencies]
+tokio = { workspace = true, features = ["rt"] }

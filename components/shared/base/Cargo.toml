@@ -40,3 +40,8 @@ libc = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-sys = { workspace = true, features = ["Win32_System_Performance"] }
+
+# wasip2 port: `GenericReceiver::recv_async` yields to the tokio runtime instead
+# of blocking it. Only needed on wasm, where every Servo actor shares one thread.
+[target.'cfg(target_family = "wasm")'.dependencies]
+tokio = { workspace = true, features = ["rt", "time"] }
