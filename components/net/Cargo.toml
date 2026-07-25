@@ -102,3 +102,7 @@ servo-default-resources = { workspace = true }
 [[test]]
 name = "main"
 path = "tests/main.rs"
+
+# wasip2 port: the resource manager runs as a LocalSet task, not an OS thread.
+[target.'cfg(target_family = "wasm")'.dependencies]
+tokio = { workspace = true, features = ["rt"] }
