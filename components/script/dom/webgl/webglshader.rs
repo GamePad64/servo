@@ -10,6 +10,7 @@ use std::sync::Once;
 
 use dom_struct::dom_struct;
 use js::context::JSContext;
+#[cfg(not(target_family = "wasm"))]
 use mozangle::shaders::{BuiltInResources, CompileOptions, Output, ShaderValidator};
 use script_bindings::cell::DomRefCell;
 use script_bindings::reflector::reflect_weak_referenceable_dom_object;
@@ -81,10 +82,12 @@ pub(crate) struct WebGLShader {
     droppable: DroppableWebGLShader,
 }
 
+#[cfg(not(target_family = "wasm"))]
 static GLSLANG_INITIALIZATION: Once = Once::new();
 
 impl WebGLShader {
     fn new_inherited(context: &WebGLRenderingContext, id: WebGLShaderId, shader_type: u32) -> Self {
+        #[cfg(not(target_family = "wasm"))]
         GLSLANG_INITIALIZATION.call_once(|| ::mozangle::shaders::initialize().unwrap());
         Self {
             webgl_object: WebGLObject::new_inherited(context),
@@ -138,6 +141,25 @@ impl WebGLShader {
     }
 
     /// glCompileShader
+    /// wasip2 port: shader compilation goes through ANGLE's GLSL translator, a
+    /// C++ library with no wasm build. WebGL is disabled in the headless wasm
+    /// build, so compilation reports failure rather than aborting.
+    #[cfg(target_family = "wasm")]
+    pub(crate) fn compile(
+        &self,
+        _api_type: GlType,
+        _webgl_version: WebGLVersion,
+        _glsl_version: WebGLSLVersion,
+        _limits: &GLLimits,
+        _ext: &WebGLExtensions,
+    ) -> WebGLResult<()> {
+        *self.info_log.borrow_mut() = DOMString::from("WebGL is not supported on this platform.");
+        self.compilation_status
+            .set(ShaderCompilationStatus::Failed);
+        Ok(())
+    }
+
+    #[cfg(not(target_family = "wasm"))]
     pub(crate) fn compile(
         &self,
         api_type: GlType,

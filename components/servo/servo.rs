@@ -21,6 +21,7 @@ use fonts::SystemFontService;
     not(target_arch = "riscv32"),
     not(target_arch = "riscv64"),
     not(target_env = "ohos"),
+    not(target_family = "wasm"),
 ))]
 use gaol::sandbox::{ChildSandbox, ChildSandboxMethods};
 use ipc_channel::ipc::{self, IpcSender};
@@ -61,6 +62,7 @@ use servo_config::{opts, pref, prefs};
     not(target_arch = "riscv32"),
     not(target_arch = "riscv64"),
     not(target_env = "ohos"),
+    not(target_family = "wasm"),
 ))]
 use servo_constellation::content_process_sandbox_profile;
 use servo_constellation::{
@@ -1237,7 +1239,10 @@ fn create_constellation(
         webxr_registry: Some(paint.webxr_main_thread_registry()),
         #[cfg(not(feature = "webxr"))]
         webxr_registry: None,
+        #[cfg(not(target_family = "wasm"))]
         webgl_threads: Some(paint.webgl_threads()),
+        #[cfg(target_family = "wasm")]
+        webgl_threads: None,
         webrender_external_image_id_manager: paint.webrender_external_image_id_manager(),
         #[cfg(feature = "webgpu")]
         wgpu_image_map: paint.webgpu_image_map(),
@@ -1372,6 +1377,7 @@ pub fn run_content_process(token: String) {
     not(target_arch = "riscv32"),
     not(target_arch = "riscv64"),
     not(target_env = "ohos"),
+    not(target_family = "wasm"),
 ))]
 fn create_sandbox() {
     ChildSandbox::new(content_process_sandbox_profile())
@@ -1388,9 +1394,12 @@ fn create_sandbox() {
     target_arch = "riscv32",
     target_arch = "riscv64",
     target_env = "ohos",
+    // wasip2 port: a component is one process and cannot spawn or confine
+    // another; this only fires if sandboxing is explicitly requested.
+    target_family = "wasm",
 ))]
 fn create_sandbox() {
-    panic!("Sandboxing is not supported on Windows, iOS, ARM, RISC-V targets and android.");
+    panic!("Sandboxing is not supported on Windows, iOS, ARM, RISC-V, android or wasm.");
 }
 
 struct DefaultEventLoopWaker;

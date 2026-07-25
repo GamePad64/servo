@@ -29,6 +29,9 @@ mod render_notifier;
 mod screenshot;
 mod touch;
 mod web_content_animation;
+// wasip2 port: this module is entirely a bridge to WebGLThreads, which the
+// wasm build does not have.
+#[cfg(not(target_family = "wasm"))]
 mod webrender_external_images;
 mod webview_renderer;
 

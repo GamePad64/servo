@@ -40,7 +40,9 @@ use servo_geometry::DeviceIndependentPixel;
 use style_traits::CSSPixel;
 use surfman::Device;
 use surfman::chains::SwapChains;
+#[cfg(not(target_family = "wasm"))]
 use webgl::WebGLComm;
+#[cfg(not(target_family = "wasm"))]
 use webgl::webgl_thread::WebGLContextBusyMap;
 #[cfg(feature = "webgpu")]
 use webgpu::canvas_context::WebGpuExternalImageMap;
@@ -116,15 +118,19 @@ pub struct Paint {
     /// A [`HashMap`] of `WebGLContextId` to a usage count. This count indicates when
     /// WebRender is still rendering the context. This is used to ensure properly clean
     /// up of all Surfman `Surface`s.
+    #[cfg(not(target_family = "wasm"))]
     pub(crate) busy_webgl_contexts_map: WebGLContextBusyMap,
 
     /// The [`WebGLThreads`] for this renderer.
+    #[cfg(not(target_family = "wasm"))]
     webgl_threads: WebGLThreads,
 
     /// A [`JoinHandle`] for joining the WebGL thread once the exit message is sent.
+    #[cfg(not(target_family = "wasm"))]
     webgl_join_handle: Cell<Option<JoinHandle<()>>>,
 
     /// The shared [`SwapChains`] used by [`WebGLThreads`] for this renderer.
+    #[cfg(not(target_family = "wasm"))]
     pub(crate) swap_chains: SwapChains<WebGLContextId, Device>,
 
     /// The channel on which messages can be sent to the time profiler.
@@ -174,6 +180,7 @@ impl Paint {
 
         let webrender_external_image_id_manager = WebRenderExternalImageIdManager::default();
         let painter_surfman_details_map = PainterSurfmanDetailsMap::default();
+        #[cfg(not(target_family = "wasm"))]
         let WebGLComm {
             webgl_threads,
             swap_chains,
@@ -203,12 +210,16 @@ impl Paint {
             paint_receiver: state.receiver,
             embedder_to_constellation_sender: state.embedder_to_constellation_sender.clone(),
             webrender_external_image_id_manager,
+            #[cfg(not(target_family = "wasm"))]
             webgl_threads,
+            #[cfg(not(target_family = "wasm"))]
             webgl_join_handle: Cell::new(Some(webgl_join_handle)),
+            #[cfg(not(target_family = "wasm"))]
             swap_chains,
             time_profiler_chan: state.time_profiler_chan,
             _mem_profiler_registration: registration,
             painter_surfman_details_map,
+            #[cfg(not(target_family = "wasm"))]
             busy_webgl_contexts_map: busy_webgl_context_map,
             #[cfg(feature = "webxr")]
             webxr_main_thread: RefCell::new(webxr_main_thread),
@@ -263,6 +274,7 @@ impl Paint {
         // devices after `clear_painter_resources` is called.
         self.painter_surfman_details_map.remove(painter_id);
 
+        #[cfg(not(target_family = "wasm"))]
         if !self.webgl_threads.clear_painter_resources(painter_id) {
             warn!("Could not clear {painter_id:?} resources in WebGLThread");
         }
@@ -307,6 +319,7 @@ impl Paint {
         self.painter(painter_id).rendering_context.size2d()
     }
 
+    #[cfg(not(target_family = "wasm"))]
     pub fn webgl_threads(&self) -> WebGLThreads {
         self.webgl_threads.clone()
     }
@@ -348,11 +361,14 @@ impl Paint {
         // another thread from finishing (i.e. SetFrameTree).
         while self.paint_receiver.try_recv().is_ok() {}
 
-        self.webgl_threads.exit();
-        if let Some(webgl_join_handle) = self.webgl_join_handle.take() &&
-            webgl_join_handle.join().is_err()
+        #[cfg(not(target_family = "wasm"))]
         {
-            warn!("Could not join WebGLThread.");
+            self.webgl_threads.exit();
+            if let Some(webgl_join_handle) = self.webgl_join_handle.take() &&
+                webgl_join_handle.join().is_err()
+            {
+                warn!("Could not join WebGLThread.");
+            }
         }
 
         // Tell the profiler, memory profiler, and scrolling timer to shut down.
