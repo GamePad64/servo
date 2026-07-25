@@ -9045,6 +9045,7 @@ dependencies = [
  "tempfile",
  "tendril",
  "time",
+ "tokio",
  "tracing",
  "turboshake",
  "unicode-bidi",
