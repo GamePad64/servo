@@ -448,12 +448,19 @@ pub fn prewarm_tls() {
         // since the resource manager thread will do that during startup.
     }
 
+    #[cfg(not(target_family = "wasm"))]
     if let Err(error) = std::thread::Builder::new()
         .name("Net-TLS-prewarm".into())
         .spawn(prewarm_tls_impl)
     {
         warn!("Failed to spawn thread to prewarm TLS: {error:?}");
     }
+
+    // wasip2: no threads. This is a latency optimisation, not an actor — running
+    // it inline costs the caller the entropy-gathering pause once, which is the
+    // very thing the thread existed to hide, but keeps behaviour identical.
+    #[cfg(target_family = "wasm")]
+    prewarm_tls_impl();
 }
 
 #[derive(Debug)]
