@@ -52,6 +52,14 @@ pub(crate) fn Platform() -> DOMString {
 }
 
 #[expect(non_snake_case)]
+/// wasip2 port: `navigator.platform` is a legacy fingerprinting surface with no
+/// meaningful answer inside a sandbox. Report the target triple's family rather
+/// than inventing a host OS.
+#[cfg(target_family = "wasm")]
+pub(crate) fn Platform() -> DOMString {
+    DOMString::from("Wasm")
+}
+
 #[cfg(target_os = "macos")]
 pub(crate) fn Platform() -> DOMString {
     DOMString::from("Mac")

@@ -15,7 +15,9 @@ use std::{env, process};
         not(target_arch = "arm"),
         not(target_arch = "aarch64"),
         not(target_arch = "riscv32"),
-        not(target_arch = "riscv64")
+        not(target_arch = "riscv64"),
+        // wasip2 port: no OS processes exist to sandbox.
+        not(target_family = "wasm")
     )
 ))]
 use gaol::profile::{Operation, PathPattern, Profile};
@@ -103,7 +105,8 @@ pub fn content_process_sandbox_profile() -> Profile {
     not(target_arch = "arm"),
     not(target_arch = "aarch64"),
     not(target_arch = "riscv32"),
-    not(target_arch = "riscv64")
+    not(target_arch = "riscv64"),
+    not(target_family = "wasm")
 ))]
 pub fn content_process_sandbox_profile() -> Profile {
     use std::path::PathBuf;
@@ -138,7 +141,9 @@ pub fn content_process_sandbox_profile() -> Profile {
     target_arch = "riscv64",
 
     // exclude apple arm devices
-    all(target_arch = "aarch64", not(target_os = "macos"))
+    all(target_arch = "aarch64", not(target_os = "macos")),
+    // wasip2 port: a component is one process and cannot spawn another.
+    target_family = "wasm"
 ))]
 pub fn content_process_sandbox_profile() {
     log::error!("Sandboxed multiprocess is not supported on this platform.");
@@ -185,7 +190,8 @@ pub fn spawn_multiprocess(content: UnprivilegedContent) -> Result<Process, IpcEr
     not(target_arch = "arm"),
     not(target_arch = "aarch64"),
     not(target_arch = "riscv32"),
-    not(target_arch = "riscv64")
+    not(target_arch = "riscv64"),
+    not(target_family = "wasm")
 ))]
 pub fn spawn_multiprocess(content: UnprivilegedContent) -> Result<Process, IpcError> {
     use gaol::sandbox::{self, Sandbox, SandboxMethods};
@@ -245,6 +251,15 @@ pub fn spawn_multiprocess(content: UnprivilegedContent) -> Result<Process, IpcEr
     sender.send(content)?;
 
     Ok(process)
+}
+
+/// wasip2 port: a wasm component is a single process and has no way to create
+/// another — there is no `wasi:process` interface. Multiprocess mode is
+/// therefore unavailable, and Servo must run single-process.
+#[cfg(target_family = "wasm")]
+pub fn spawn_multiprocess(_content: UnprivilegedContent) -> Result<Process, IpcError> {
+    log::error!("Multiprocess is not supported on wasm: a component cannot spawn a process.");
+    Err(IpcError::Disconnected)
 }
 
 #[cfg(target_os = "ios")]

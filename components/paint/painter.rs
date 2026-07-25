@@ -61,6 +61,7 @@ use crate::refresh_driver::{AnimationRefreshDriverObserver, BaseRefreshDriver};
 use crate::render_notifier::RenderNotifier;
 use crate::screenshot::ScreenshotTaker;
 use crate::web_content_animation::WebContentAnimator;
+#[cfg(not(target_family = "wasm"))]
 use crate::webrender_external_images::WebGLExternalImages;
 use crate::webview_renderer::{PinchZoomResult, ScrollResult, UnknownWebView, WebViewRenderer};
 
@@ -163,13 +164,16 @@ impl Painter {
         let mut external_image_handlers = Box::new(WebRenderExternalImageHandlers::new(id_manager));
 
         // Set WebRender external image handler for WebGL textures.
-        let image_handler = Box::new(WebGLExternalImages::new(
-            paint.webgl_threads(),
-            rendering_context.clone(),
-            paint.swap_chains.clone(),
-            paint.busy_webgl_contexts_map.clone(),
-        ));
-        external_image_handlers.set_handler(image_handler, WebRenderImageHandlerType::WebGl);
+        #[cfg(not(target_family = "wasm"))]
+        {
+            let image_handler = Box::new(WebGLExternalImages::new(
+                paint.webgl_threads(),
+                rendering_context.clone(),
+                paint.swap_chains.clone(),
+                paint.busy_webgl_contexts_map.clone(),
+            ));
+            external_image_handlers.set_handler(image_handler, WebRenderImageHandlerType::WebGl);
+        }
 
         #[cfg(feature = "webgpu")]
         external_image_handlers.set_handler(

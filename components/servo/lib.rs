@@ -75,8 +75,12 @@ pub use net_traits::CookieSource;
 // fleshed out public domains API if we want to expose it.
 pub use net_traits::pub_domains::is_reg_domain;
 pub use paint::WebRenderDebugOption;
+pub use paint_api::rendering_context::RenderingContext;
+// wasip2 port: the concrete rendering contexts are OpenGL implementations over
+// surfman and are gated out of the wasm build; only the trait survives.
+#[cfg(not(target_family = "wasm"))]
 pub use paint_api::rendering_context::{
-    OffscreenRenderingContext, RenderingContext, SoftwareRenderingContext, WindowRenderingContext,
+    OffscreenRenderingContext, SoftwareRenderingContext, WindowRenderingContext,
 };
 // Expose our profile traits for servoshell, so we can instrument code there, but don't
 // add it as an official API.
