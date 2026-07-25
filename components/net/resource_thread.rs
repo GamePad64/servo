@@ -4,6 +4,7 @@
 
 //! A thread that takes a URL and streams back the binary data.
 
+use std::ops::ControlFlow;
 use std::borrow::ToOwned;
 use std::collections::HashMap;
 use std::fs::File;
@@ -146,6 +147,7 @@ pub fn new_core_resource_thread(
         revoke_sender,
         refresh_token_sender: refresh_sender,
     }));
+    #[cfg(not(target_family = "wasm"))]
     thread::Builder::new()
         .name("ResourceManager".to_owned())
         .spawn(move || {
@@ -185,7 +187,59 @@ pub fn new_core_resource_thread(
             );
         })
         .expect("Thread spawning failed");
+
+    // wasip2: no threads. The resource manager runs as a LocalSet task; its
+    // select loop awaits instead of blocking so the actors that feed it can run.
+    #[cfg(target_family = "wasm")]
+    tokio::task::spawn_local(async move {
+        let resource_manager = CoreResourceManager::new(
+            devtools_sender,
+            time_profiler_chan,
+            embedder_proxy.clone(),
+            ca_certificates.clone(),
+            ignore_certificate_errors,
+            blob_token_communicator,
+        );
+
+        let mut channel_manager = ResourceChannelManager {
+            resource_manager,
+            config_dir,
+            ca_certificates,
+            ignore_certificate_errors,
+            cancellation_listeners: Default::default(),
+            cookie_listeners: Default::default(),
+        };
+
+        // `run_with_memory_reporting` takes an `FnOnce()` and cannot hold the
+        // registration across an await, so register directly.
+        let _registration = mem_profiler_chan.prepare_memory_reporting(
+            String::from("network-cache-reporter"),
+            report_chan,
+            CoreResourceMsg::CollectMemoryReport,
+        );
+        channel_manager
+            .start_async(
+                public_setup_port,
+                private_setup_port,
+                report_port,
+                revoke_receiver,
+                refresh_receiver,
+                protocols,
+                embedder_proxy,
+            )
+            .await;
+    });
+
     (public_setup_chan, private_setup_chan)
+}
+
+/// The `GenericReceiverSet` ids for the channels the resource manager selects on.
+struct ResourceChannelIds {
+    private: u64,
+    public: u64,
+    reporter: u64,
+    revoker: u64,
+    refresh: u64,
 }
 
 struct ResourceChannelManager {
@@ -250,15 +304,20 @@ fn create_http_states(
 
 impl ResourceChannelManager {
     #[expect(clippy::too_many_arguments)]
-    fn start(
+    /// Build the channel set and the HTTP states. Shared by both loop drivers.
+    fn setup(
         &mut self,
         public_receiver: GenericReceiver<CoreResourceMsg>,
         private_receiver: GenericReceiver<CoreResourceMsg>,
         memory_reporter: GenericReceiver<CoreResourceMsg>,
         revoke_receiver: GenericReceiver<CoreResourceMsg>,
         refresh_receiver: GenericReceiver<CoreResourceMsg>,
-        protocols: Arc<ProtocolRegistry>,
         embedder_proxy: GenericEmbedderProxy<NetToEmbedderMsg>,
+    ) -> (
+        GenericReceiverSet<CoreResourceMsg>,
+        ResourceChannelIds,
+        Arc<HttpState>,
+        Arc<HttpState>,
     ) {
         let (public_http_state, private_http_state) = create_http_states(
             self.config_dir.as_deref(),
@@ -273,13 +332,109 @@ impl ResourceChannelManager {
         let reporter_id = rx_set.add(memory_reporter);
         let revoker_id = rx_set.add(revoke_receiver);
         let refresh_id = rx_set.add(refresh_receiver);
+        let ids = ResourceChannelIds {
+            private: private_id,
+            public: public_id,
+            reporter: reporter_id,
+            revoker: revoker_id,
+            refresh: refresh_id,
+        };
+        (rx_set, ids, public_http_state, private_http_state)
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    fn start(
+        &mut self,
+        public_receiver: GenericReceiver<CoreResourceMsg>,
+        private_receiver: GenericReceiver<CoreResourceMsg>,
+        memory_reporter: GenericReceiver<CoreResourceMsg>,
+        revoke_receiver: GenericReceiver<CoreResourceMsg>,
+        refresh_receiver: GenericReceiver<CoreResourceMsg>,
+        protocols: Arc<ProtocolRegistry>,
+        embedder_proxy: GenericEmbedderProxy<NetToEmbedderMsg>,
+    ) {
+        let (mut rx_set, ids, public_http_state, private_http_state) = self.setup(
+            public_receiver,
+            private_receiver,
+            memory_reporter,
+            revoke_receiver,
+            refresh_receiver,
+            embedder_proxy,
+        );
         let mut selector = rx_set.selector();
 
         loop {
             for received in selector.select().into_iter() {
-                // Handles case where profiler thread shuts down before resource thread.
+                if self.handle_selection(
+                    received,
+                    &ids,
+                    &public_http_state,
+                    &private_http_state,
+                    &protocols,
+                ) == ControlFlow::Break(())
+                {
+                    return;
+                }
+            }
+        }
+
+    }
+
+    /// wasip2: identical loop, awaiting instead of blocking. `select()` waits on
+    /// five channels and would stall the single-threaded runtime that the
+    /// senders also live on.
+    #[cfg(target_family = "wasm")]
+    async fn start_async(
+        &mut self,
+        public_receiver: GenericReceiver<CoreResourceMsg>,
+        private_receiver: GenericReceiver<CoreResourceMsg>,
+        memory_reporter: GenericReceiver<CoreResourceMsg>,
+        revoke_receiver: GenericReceiver<CoreResourceMsg>,
+        refresh_receiver: GenericReceiver<CoreResourceMsg>,
+        protocols: Arc<ProtocolRegistry>,
+        embedder_proxy: GenericEmbedderProxy<NetToEmbedderMsg>,
+    ) {
+        let (mut rx_set, ids, public_http_state, private_http_state) = self.setup(
+            public_receiver,
+            private_receiver,
+            memory_reporter,
+            revoke_receiver,
+            refresh_receiver,
+            embedder_proxy,
+        );
+        let mut selector = rx_set.selector();
+
+        loop {
+            for received in selector.select_async().await.into_iter() {
+                if self.handle_selection(
+                    received,
+                    &ids,
+                    &public_http_state,
+                    &private_http_state,
+                    &protocols,
+                ) == ControlFlow::Break(())
+                {
+                    return;
+                }
+            }
+        }
+    }
+
+    /// Handle one selection result. Shared by the native and wasm loops so they
+    /// cannot drift apart.
+    fn handle_selection(
+        &mut self,
+        received: GenericSelectionResult<CoreResourceMsg>,
+        ids: &ResourceChannelIds,
+        public_http_state: &Arc<HttpState>,
+        private_http_state: &Arc<HttpState>,
+        protocols: &Arc<ProtocolRegistry>,
+    ) -> ControlFlow<()> {
+        let (revoker_id, refresh_id, reporter_id, private_id, public_id) = (
+            ids.revoker, ids.refresh, ids.reporter, ids.private, ids.public,
+        );
                 match received {
-                    GenericSelectionResult::ChannelClosed(_) => continue,
+                    GenericSelectionResult::ChannelClosed(_) => return ControlFlow::Continue(()),
                     GenericSelectionResult::Error(error) => {
                         log::error!("Found selection error: {error}")
                     },
@@ -288,7 +443,7 @@ impl ResourceChannelManager {
                             let CoreResourceMsg::RevokeTokenForFile(revocation_request) = msg
                             else {
                                 log::error!("Blob revocation channel received unexpected message");
-                                continue;
+                                return ControlFlow::Continue(());
                             };
                             self.resource_manager.filemanager.invalidate_token(
                                 &FileTokenCheck::Required(revocation_request.token),
@@ -297,7 +452,7 @@ impl ResourceChannelManager {
                         } else if id == refresh_id {
                             let CoreResourceMsg::RefreshTokenForFile(refresh_request) = msg else {
                                 log::error!("Blob revocation channel received unexpected message");
-                                continue;
+                                return ControlFlow::Continue(());
                             };
 
                             let FileTokenCheck::Required(refreshed_token) = self
@@ -315,7 +470,7 @@ impl ResourceChannelManager {
                                     &public_http_state,
                                     &private_http_state,
                                 );
-                                continue;
+                                return ControlFlow::Continue(());
                             } else {
                                 log::error!("memory reporter should only send CollectMemoryReport");
                             }
@@ -326,14 +481,13 @@ impl ResourceChannelManager {
                                 assert_eq!(id, public_id);
                                 &public_http_state
                             };
-                            if !self.process_msg(msg, group, Arc::clone(&protocols)) {
-                                return;
+                            if !self.process_msg(msg, group, Arc::clone(protocols)) {
+                                return ControlFlow::Break(());
                             }
                         }
                     },
-                }
-            }
         }
+        ControlFlow::Continue(())
     }
 
     fn process_report(
