@@ -50,7 +50,11 @@ rustdocflags = ["--document-private-items"]
 rustflags = [
   "--cfg", "tokio_unstable",
   "-L", "/opt/wasi-sdk/share/wasi-sysroot/lib/wasm32-wasip2",
-  "-L", "/opt/wasi-sdk/share/wasi-sysroot/lib/wasm32-wasip2/noeh",
+  # The prebuilt SpiderMonkey references the C++ exception ABI
+  # (env::__cxa_allocate_exception), so the `eh` libc++ variant is required —
+  # with libunwind, without which _Unwind_* stay undefined.
+  "-L", "/opt/wasi-sdk/share/wasi-sysroot/lib/wasm32-wasip2/eh",
   "-C", "link-arg=-lc++",
   "-C", "link-arg=-lc++abi",
+  "-C", "link-arg=-lunwind",
 ]

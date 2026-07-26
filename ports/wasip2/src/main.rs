@@ -42,6 +42,22 @@ fn main() {
 }
 
 async fn run(html: &str) -> String {
+    // Boot Servo itself. `ServoBuilder::build()` needs no RenderingContext — that
+    // is only required to create a WebView — so this exercises exactly what the
+    // un-threading changed: the constellation, resource manager, font service and
+    // timer scheduler all start as tasks on this LocalSet.
+    let servo = servo::ServoBuilder::default().build();
+    let mut summary = format!("SERVO BOOTED, {} bytes of HTML received", html.len());
+
+    // Give the actor tasks a chance to run their first iterations.
+    for _ in 0..1000 {
+        tokio::task::yield_now().await;
+    }
+    summary.push_str("; actors pumped 1000 times");
+    drop(servo);
+    return summary;
+    #[allow(unreachable_code)]
+    {
     // Grows in Task 5 as Servo's actors are converted one at a time. Until then
     // this proves the runtime scaffold links against libservo and starts under
     // wasmtime — which is itself worth confirming before touching any actor,
@@ -54,4 +70,5 @@ async fn run(html: &str) -> String {
         html.len(),
         parallelism
     )
+    }
 }
