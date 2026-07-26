@@ -3,7 +3,12 @@
 use super::connection::Connection as ConnectionInterface;
 use crate::{ContextAttributes, ContextID, Error, GLApi, SurfaceAccess, SurfaceInfo, SurfaceType};
 use euclid::default::Size2D;
+// wasip2: glow is absent, and a surface can never be bound to a texture without
+// a GPU, so the handle type is uninhabited in practice.
+#[cfg(not(target_family = "wasm"))]
 use glow::Texture;
+#[cfg(target_family = "wasm")]
+pub type Texture = std::convert::Infallible;
 
 use std::os::raw::c_void;
 

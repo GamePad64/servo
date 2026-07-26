@@ -24,7 +24,6 @@ dpi = { workspace = true }
 embedder_traits = { workspace = true }
 euclid = { workspace = true }
 gleam = { workspace = true }
-glow = { workspace = true }
 image = { workspace = true }
 ipc-channel = { workspace = true }
 log = { workspace = true }
@@ -47,3 +46,8 @@ stylo_traits = { workspace = true }
 surfman = { workspace = true, features = ["sm-x11"] }
 tracing = { workspace = true, optional = true }
 webrender_api = { workspace = true }
+
+# wasip2 port: glow selects its web backend on wasm32, which pulls
+# web-sys/wasm-bindgen and emits imports a component cannot resolve.
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+glow = { workspace = true }

@@ -1,6 +1,8 @@
 //! OpenGL information.
 
+#[cfg(not(target_family = "wasm"))]
 use crate::Gl;
+#[cfg(not(target_family = "wasm"))]
 use glow::HasContext;
 
 /// The API (OpenGL or OpenGL ES).
@@ -32,6 +34,7 @@ impl GLVersion {
     }
 
     #[allow(dead_code)]
+    #[cfg(not(target_family = "wasm"))]
     pub(crate) fn current(gl: &Gl) -> GLVersion {
         let version = gl.version();
         Self {

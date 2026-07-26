@@ -67,6 +67,10 @@ pub trait RenderingContext {
     /// Returns the `gleam` version of the OpenGL or GLES API.
     fn gleam_gl_api(&self) -> Rc<dyn gleam::gl::Gl>;
     /// Returns the OpenGL or GLES API.
+    /// wasip2: glow is not in the graph — its web backend pulls wasm-bindgen,
+    /// whose imports cannot be resolved when encoding a component — and there is
+    /// no GL context to hand back in any case.
+    #[cfg(not(target_family = "wasm"))]
     fn glow_gl_api(&self) -> Arc<glow::Context>;
     /// Creates a texture from a given surface and returns the surface texture,
     /// the OpenGL texture object, and the size of the surface. Default to `None`.
@@ -759,6 +763,7 @@ pub struct OffscreenRenderingContext {
     framebuffer: RefCell<Framebuffer>,
 }
 
+#[cfg(not(target_family = "wasm"))]
 type RenderToParentCallback = Box<dyn Fn(&glow::Context, Rect<i32>) + Send + Sync>;
 
 #[cfg(not(target_family = "wasm"))]

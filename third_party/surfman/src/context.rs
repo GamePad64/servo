@@ -2,8 +2,10 @@
 
 #![allow(unused_imports)]
 
+#[cfg(not(target_family = "wasm"))]
 use crate::gl;
 use crate::info::GLVersion;
+#[cfg(not(target_family = "wasm"))]
 use crate::Gl;
 
 use std::ffi::CStr;
@@ -69,12 +71,14 @@ impl ContextAttributes {
 }
 
 #[cfg(any(target_os = "android", target_env = "ohos"))]
+#[cfg(not(target_family = "wasm"))]
 pub(crate) fn current_context_uses_compatibility_profile(_gl: &Gl) -> bool {
     false
 }
 
 #[cfg(not(any(target_os = "android", target_env = "ohos")))]
 #[allow(dead_code)]
+#[cfg(not(target_family = "wasm"))]
 pub(crate) fn current_context_uses_compatibility_profile(gl: &Gl) -> bool {
     use glow::HasContext;
 

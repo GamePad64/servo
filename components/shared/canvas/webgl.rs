@@ -8,7 +8,12 @@ use std::num::{NonZeroU32, NonZeroU64};
 use std::ops::Deref;
 
 use euclid::default::{Rect, Size2D};
+#[cfg(not(target_family = "wasm"))]
 use glow::{self as gl};
+// wasip2: glow's web backend would drag wasm-bindgen into the component. Only
+// the enum values are needed here, and they are plain numbers.
+#[cfg(target_family = "wasm")]
+use crate::gl_consts as gl;
 // wasip2 port: glow's Native* types are tuple structs over NonZeroU32 on the
 // native backend only; under wasm glow compiles its web backend, where these are
 // opaque slotmap keys with no `.0`. The WebGL*Id types below stay — script's

@@ -465,7 +465,11 @@ impl WebGLExtensions {
         if type_ == OESTextureHalfFloatConstants::HALF_FLOAT_OES &&
             !self.supports_gl_extension("GL_OES_texture_half_float")
         {
+            #[cfg(not(target_family = "wasm"))]
             return glow::HALF_FLOAT;
+            // wasip2: glow is not in the graph; the value is a plain GL enum.
+            #[cfg(target_family = "wasm")]
+            return servo_canvas_traits::gl_consts::HALF_FLOAT;
         }
         type_
     }

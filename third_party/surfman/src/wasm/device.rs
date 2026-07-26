@@ -10,7 +10,7 @@
 //! so a mistaken call degrades instead of aborting the whole component.
 
 use euclid::default::Size2D;
-use glow::Texture;
+use crate::device::Texture;
 use std::os::raw::c_void;
 
 use crate::device::Device as DeviceInterface;
