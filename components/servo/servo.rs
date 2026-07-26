@@ -1350,6 +1350,11 @@ pub fn run_content_process(token: String) {
                 background_hang_monitor_register,
             );
 
+            // wasip2: script event loops are tasks on the shared LocalSet, so
+            // `script_join_handle` is `()` and there is nothing to join. This
+            // path is unreachable there in any case — a component cannot spawn
+            // the content process this function is the entry point for.
+            #[cfg(not(target_family = "wasm"))]
             script_join_handle
                 .join()
                 .expect("Failed to join on the script thread.");

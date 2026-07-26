@@ -480,16 +480,56 @@ impl ScriptThreadFactory for ScriptThread {
         layout_factory: Arc<dyn LayoutFactory>,
         image_cache_factory: Arc<dyn ImageCacheFactory>,
         background_hang_monitor_register: Box<dyn BackgroundHangMonitorRegister>,
-    ) -> JoinHandle<()> {
+    ) -> layout_api::ScriptEventLoopHandle {
         // Setup pipeline-namespace-installing for all threads in this process.
         // Idempotent in single-process mode.
         PipelineNamespace::set_installer_sender(state.namespace_request_sender.clone());
 
         let script_thread_id = state.id;
-        thread::Builder::new()
-            .name(format!("Script#{script_thread_id}"))
-            .stack_size(8 * 1024 * 1024) // 8 MiB stack to be consistent with other browsers.
-            .spawn(move || {
+        // wasip2 has no threads and no configurable stack, so the 8 MiB below
+        // has no analogue; the script event loop is a task on the shared
+        // LocalSet and there is no handle to hand back.
+        #[cfg(not(target_family = "wasm"))]
+        {
+            thread::Builder::new()
+                .name(format!("Script#{script_thread_id}"))
+                .stack_size(8 * 1024 * 1024) // 8 MiB stack to be consistent with other browsers.
+                .spawn(move || {
+                    profile_traits::debug_event!(
+                        "ScriptThread::spawned",
+                        script_thread_id = script_thread_id.to_string()
+                    );
+                    thread_state::initialize(ThreadState::SCRIPT);
+                    PipelineNamespace::install(state.pipeline_namespace_id);
+                    ScriptEventLoopId::install(state.id);
+                    let memory_profiler_sender = state.memory_profiler_sender.clone();
+                    let reporter_name = format!("script-reporter-{script_thread_id:?}");
+                    let (script_thread, mut cx) = ScriptThread::new(
+                        state,
+                        layout_factory,
+                        image_cache_factory,
+                        background_hang_monitor_register,
+                    );
+                    SCRIPT_THREAD_ROOT.with(|root| {
+                        root.set(Some(Rc::as_ptr(&script_thread)));
+                    });
+                    let mut failsafe = ScriptMemoryFailsafe::new(&script_thread);
+
+                    memory_profiler_sender.run_with_memory_reporting(
+                        || script_thread.start(&mut cx),
+                        reporter_name,
+                        ScriptEventLoopSender::MainThread(script_thread.senders.self_sender.clone()),
+                        CommonScriptMsg::CollectReports,
+                    );
+
+                    // This must always be the very last operation performed before the thread completes
+                    failsafe.neuter();
+                })
+                .expect("Thread spawning failed")
+        }
+
+        #[cfg(target_family = "wasm")]
+        tokio::task::spawn_local(async move {
                 profile_traits::debug_event!(
                     "ScriptThread::spawned",
                     script_thread_id = script_thread_id.to_string()
@@ -511,7 +551,7 @@ impl ScriptThreadFactory for ScriptThread {
                 let mut failsafe = ScriptMemoryFailsafe::new(&script_thread);
 
                 memory_profiler_sender.run_with_memory_reporting(
-                    || script_thread.start(&mut cx),
+                    || (),
                     reporter_name,
                     ScriptEventLoopSender::MainThread(script_thread.senders.self_sender.clone()),
                     CommonScriptMsg::CollectReports,
@@ -519,8 +559,9 @@ impl ScriptThreadFactory for ScriptThread {
 
                 // This must always be the very last operation performed before the thread completes
                 failsafe.neuter();
-            })
-            .expect("Thread spawning failed")
+            script_thread.start_async(&mut cx).await;
+            failsafe.neuter();
+        });
     }
 }
 
@@ -1072,10 +1113,22 @@ impl ScriptThread {
 
     /// Starts the script thread. After calling this method, the script thread will loop receiving
     /// messages on its port.
+    #[cfg(not(target_family = "wasm"))]
     pub(crate) fn start(&self, cx: &mut js::context::JSContext) {
         debug!("Starting script thread.");
         while self.handle_msgs(cx) {
             // Go on...
+            debug!("Running script thread.");
+        }
+        debug!("Stopped script thread.");
+    }
+
+    /// wasip2: the same loop, awaiting the next message rather than parking the
+    /// one thread every other Servo actor also runs on.
+    #[cfg(target_family = "wasm")]
+    pub(crate) async fn start_async(&self, cx: &mut js::context::JSContext) {
+        debug!("Starting script thread.");
+        while self.handle_msgs_async(cx).await {
             debug!("Running script thread.");
         }
         debug!("Stopped script thread.");
@@ -1410,21 +1463,47 @@ impl ScriptThread {
     }
 
     /// Handle incoming messages from other tasks and the task queue.
-    fn handle_msgs(&self, cx: &mut js::context::JSContext) -> bool {
-        // Proritize rendering tasks and others, and gather all other events as `sequential`.
-        let mut sequential = vec![];
+    /// wasip2 twin of [`Self::handle_msgs`]. Only the wait for the first message
+    /// differs; everything after it is already non-blocking, so the body is
+    /// shared through [`Self::handle_msgs_from`].
+    #[cfg(target_family = "wasm")]
+    async fn handle_msgs_async(&self, cx: &mut js::context::JSContext) -> bool {
+        self.background_hang_monitor.notify_wait();
+        debug!("Waiting for event.");
+        let fully_active = self.get_fully_active_document_ids();
+        let event = self
+            .receivers
+            .recv_async(
+                &self.task_queue,
+                &self.timer_scheduler.borrow(),
+                &fully_active,
+            )
+            .await;
+        self.handle_msgs_from(cx, event)
+    }
 
+    #[cfg(not(target_family = "wasm"))]
+    fn handle_msgs(&self, cx: &mut js::context::JSContext) -> bool {
         // Notify the background-hang-monitor we are waiting for an event.
         self.background_hang_monitor.notify_wait();
 
         // Receive at least one message so we don't spinloop.
         debug!("Waiting for event.");
         let fully_active = self.get_fully_active_document_ids();
-        let mut event = self.receivers.recv(
+        let event = self.receivers.recv(
             &self.task_queue,
             &self.timer_scheduler.borrow(),
             &fully_active,
         );
+        self.handle_msgs_from(cx, event)
+    }
+
+    /// The event loop body once the first message is in hand.
+    fn handle_msgs_from(&self, cx: &mut js::context::JSContext, event: MixedMessage) -> bool {
+        // Proritize rendering tasks and others, and gather all other events as `sequential`.
+        let mut sequential = vec![];
+        let fully_active = self.get_fully_active_document_ids();
+        let mut event = event;
 
         loop {
             debug!("Handling event: {event:?}");
