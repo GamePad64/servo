@@ -38,6 +38,10 @@ impl Profiler {
 
         // Always spawn the memory profiler. If there is no timer thread it won't receive regular
         // `Print` events, but it will still receive the other events.
+        // wasip2: profilers are diagnostics, not part of the rendering path.
+        // A component is profiled from the host side, so the thread is simply
+        // not started; the channel stays live and its messages are discarded.
+        #[cfg(not(target_family = "wasm"))]
         thread::Builder::new()
             .name("MemoryProfiler".to_owned())
             .spawn(move || {

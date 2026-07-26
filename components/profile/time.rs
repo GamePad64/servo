@@ -88,6 +88,7 @@ impl Profiler {
                 let (chan, port) = generic_channel::channel().unwrap();
                 // Spawn the time profiler thread
                 let outputoption = option.clone();
+                #[cfg(not(target_family = "wasm"))]
                 thread::Builder::new()
                     .name("TimeProfiler".to_owned())
                     .spawn(move || {
@@ -102,6 +103,7 @@ impl Profiler {
                     OutputOptions::Stdout(period) => {
                         // Spawn a timer thread
                         let chan = chan.clone();
+                        #[cfg(not(target_family = "wasm"))]
                         thread::Builder::new()
                             .name("TimeProfTimer".to_owned())
                             .spawn(move || {

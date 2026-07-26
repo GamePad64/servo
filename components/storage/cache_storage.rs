@@ -47,9 +47,18 @@ impl CacheStorageThreadFactory for CacheStorageThreadHandle {
         let mut temp_dir: Option<tempfile::TempDir> = None;
         let base_dir = config_dir
             .unwrap_or_else(|| {
-                let tmp_dir = tempfile::tempdir().unwrap();
-                let path = tmp_dir.path().to_path_buf();
-                temp_dir = Some(tmp_dir);
+// wasip2: `std::env::temp_dir()` panics ("no filesystem on wasm") — a
+                // component has no ambient filesystem, only what the host preopens.
+                // Use a fixed path instead; the host decides whether it exists.
+                #[cfg(target_family = "wasm")]
+                let path = PathBuf::from("/tmp/servo");
+                #[cfg(not(target_family = "wasm"))]
+                let path = {
+                    let tmp_dir = tempfile::tempdir().unwrap();
+                    let path = tmp_dir.path().to_path_buf();
+                    temp_dir = Some(tmp_dir);
+                    path
+                };
                 path
             })
             .join("cachestorage");
@@ -62,6 +71,11 @@ impl CacheStorageThreadFactory for CacheStorageThreadHandle {
         std::fs::create_dir_all(&storage_dir)
             .expect("Failed to create CacheStorage storage directory");
         let sender_clone = generic_sender.clone();
+        // wasip2: storage backends are not exercised by a headless parse, and
+        // `thread::spawn` fails at run time there. The channel stays live; its
+        // messages are simply never served, which surfaces to callers as an
+        // unresponsive storage backend rather than an abort.
+        #[cfg(not(target_family = "wasm"))]
         thread::Builder::new()
             .name("CacheStorageThread".to_owned())
             .spawn(move || {
