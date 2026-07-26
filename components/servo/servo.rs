@@ -903,7 +903,11 @@ impl Servo {
         );
 
         if !opts.multiprocess {
-            media_platform::init();
+            // wasip2: even the dummy media backend starts a player thread, and
+        // `thread::spawn` fails at run time there. Media is disabled in the
+        // headless wasm build, so initialisation is skipped entirely.
+        #[cfg(not(target_family = "wasm"))]
+        media_platform::init();
         }
 
         // Reserving a namespace to create WebViewId.
@@ -1322,7 +1326,11 @@ pub fn run_content_process(token: String) {
 
     match unprivileged_content {
         UnprivilegedContent::ScriptEventLoop(new_event_loop_info) => {
-            media_platform::init();
+            // wasip2: even the dummy media backend starts a player thread, and
+        // `thread::spawn` fails at run time there. Media is disabled in the
+        // headless wasm build, so initialisation is skipped entirely.
+        #[cfg(not(target_family = "wasm"))]
+        media_platform::init();
 
             set_logger(
                 new_event_loop_info

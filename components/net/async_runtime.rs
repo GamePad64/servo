@@ -38,7 +38,18 @@ impl AsyncRuntime for AsyncRuntimeHolder {
 static ASYNC_RUNTIME_HANDLE: OnceLock<Handle> = OnceLock::new();
 
 pub fn init_async_runtime() -> Box<dyn AsyncRuntime> {
+    // wasip2: there is one thread, so a worker pool cannot be created — the
+    // multi-threaded scheduler spawns its workers eagerly and fails at run time.
+    // The current-thread scheduler is the only shape available, and it is the
+    // same one the whole port runs on.
+    #[cfg(target_family = "wasm")]
+    let runtime = Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .expect("Unable to build tokio-runtime runtime");
+
     // Initialize a tokio runtime.
+    #[cfg(not(target_family = "wasm"))]
     let runtime = Builder::new_multi_thread()
         .thread_name_fn(|| {
             static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
