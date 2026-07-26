@@ -20,7 +20,6 @@ webgl_backtrace = []
 crossbeam-channel = { workspace = true }
 euclid = { workspace = true }
 fonts_traits = { workspace = true }
-glow = { workspace = true }
 kurbo = { workspace = true, features = ["serde"] }
 log = { workspace = true }
 malloc_size_of = { workspace = true }
@@ -32,3 +31,8 @@ strum = { workspace = true }
 stylo = { workspace = true }
 webrender_api = { workspace = true }
 webxr-api = { workspace = true }
+
+# wasip2 port: glow selects its web backend on wasm32, which pulls
+# web-sys/wasm-bindgen and emits imports a component cannot resolve.
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+glow = { workspace = true }

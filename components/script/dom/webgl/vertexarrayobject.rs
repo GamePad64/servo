@@ -131,7 +131,10 @@ impl VertexArrayObject {
             constants::FLOAT => 4,
             constants::INT | constants::UNSIGNED_INT if is_webgl2 => 4,
             constants2::HALF_FLOAT if is_webgl2 => 2,
+            #[cfg(not(target_family = "wasm"))]
             glow::FIXED if is_webgl2 => 4,
+            #[cfg(target_family = "wasm")]
+            servo_canvas_traits::gl_consts::FIXED if is_webgl2 => 4,
             constants2::INT_2_10_10_10_REV | constants2::UNSIGNED_INT_2_10_10_10_REV
                 if is_webgl2 && size == 4 =>
             {

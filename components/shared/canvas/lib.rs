@@ -13,6 +13,8 @@ use crate::canvas::CanvasId;
 
 pub mod canvas;
 #[macro_use]
+#[cfg(target_family = "wasm")]
+pub mod gl_consts;
 pub mod webgl;
 
 pub enum ConstellationCanvasMsg {

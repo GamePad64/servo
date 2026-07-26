@@ -19,7 +19,7 @@ pub mod angle;
 pub(crate) mod base;
 #[cfg(macos_platform)]
 pub mod cgl;
-#[cfg(feature = "chains")]
+#[cfg(all(feature = "chains", not(target_family = "wasm")))]
 pub mod chains;
 pub mod connection;
 mod context;
@@ -35,6 +35,7 @@ pub mod macros;
 pub mod mesa_surfaceless;
 #[cfg(not(wasi_platform))]
 pub mod multi;
+#[cfg(not(target_family = "wasm"))]
 mod renderbuffers;
 mod surface;
 #[cfg(all(x11_platform, not(wayland_default)))]
@@ -71,6 +72,7 @@ pub use default::connection::{Connection, NativeConnection};
 pub use default::context::{Context, ContextDescriptor, NativeContext};
 pub use default::device::{Adapter, Device, NativeDevice};
 pub use default::surface::{NativeWidget, Surface, SurfaceTexture};
+#[cfg(not(target_family = "wasm"))]
 pub(crate) use glow::{self as gl, Context as Gl};
 pub(crate) use macros::implement_interfaces;
 

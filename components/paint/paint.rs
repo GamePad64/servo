@@ -39,6 +39,7 @@ use servo_constellation_traits::EmbedderToConstellationMessage;
 use servo_geometry::DeviceIndependentPixel;
 use style_traits::CSSPixel;
 use surfman::Device;
+#[cfg(not(target_family = "wasm"))]
 use surfman::chains::SwapChains;
 #[cfg(not(target_family = "wasm"))]
 use webgl::WebGLComm;

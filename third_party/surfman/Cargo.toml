@@ -69,7 +69,10 @@ version = "0.22"
 version = "1.0"
 optional = true
 
-[dependencies.glow]
+# wasip2 port: glow selects its web backend on wasm32, which depends on
+# web-sys/wasm-bindgen and emits __wbindgen_placeholder__ imports that cannot be
+# resolved when encoding a component. Native targets only.
+[target.'cfg(not(target_family = "wasm"))'.dependencies.glow]
 version = "0.17"
 
 [dependencies.libc]

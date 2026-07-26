@@ -24,7 +24,11 @@ pub struct SurfaceInfo {
     /// The OpenGL framebuffer object that can be used to render to this surface.
     ///
     /// This is only valid when the surface is actually attached to a context.
+    #[cfg(not(target_family = "wasm"))]
     pub framebuffer_object: Option<glow::Framebuffer>,
+    /// wasip2: no GL, so never a framebuffer.
+    #[cfg(target_family = "wasm")]
+    pub framebuffer_object: Option<std::convert::Infallible>,
 }
 
 // The default framebuffer for a context.
