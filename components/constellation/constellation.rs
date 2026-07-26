@@ -499,6 +499,7 @@ pub struct Constellation<STF, SWF> {
 
     /// A vector of [`JoinHandle`]s used to ensure full termination of threaded [`EventLoop`]s
     /// which are runnning in the same process.
+    #[cfg(not(target_family = "wasm"))]
     event_loop_join_handles: Vec<JoinHandle<()>>,
 
     /// A list of URLs that can access privileged internal APIs.
@@ -735,7 +736,9 @@ where
                     broken_image_icon_data: broken_image_icon_data.clone(),
                     process_manager: ProcessManager::new(state.mem_profiler_chan),
                     async_runtime: state.async_runtime,
-                    event_loop_join_handles: Default::default(),
+                    #[cfg(not(target_family = "wasm"))]
+                    #[cfg(not(target_family = "wasm"))]
+                event_loop_join_handles: Default::default(),
                     privileged_urls: state.privileged_urls,
                     image_cache_factory: Arc::new(ImageCacheFactoryImpl::new(
                         broken_image_icon_data,
@@ -868,6 +871,7 @@ where
                 broken_image_icon_data: broken_image_icon_data.clone(),
                 process_manager: ProcessManager::new(state.mem_profiler_chan),
                 async_runtime: state.async_runtime,
+                #[cfg(not(target_family = "wasm"))]
                 event_loop_join_handles: Default::default(),
                 privileged_urls: state.privileged_urls,
                 image_cache_factory: Arc::new(ImageCacheFactoryImpl::new(
@@ -893,11 +897,18 @@ where
         self.event_loops.push(Rc::downgrade(event_loop));
     }
 
+    #[cfg(not(target_family = "wasm"))]
     pub(crate) fn add_event_loop_join_handle(&mut self, join_handle: JoinHandle<()>) {
         self.event_loop_join_handles.push(join_handle);
     }
 
+    /// wasip2: script event loops are tasks, not threads, so there is no handle
+    /// to keep and nothing to join.
+    #[cfg(target_family = "wasm")]
+    pub(crate) fn add_event_loop_join_handle(&mut self, _join_handle: ()) {}
+
     fn clean_up_finished_script_event_loops(&mut self) {
+        #[cfg(not(target_family = "wasm"))]
         self.event_loop_join_handles
             .retain(|join_handle| !join_handle.is_finished());
         self.event_loops
@@ -2924,6 +2935,7 @@ where
     fn handle_shutdown(&mut self) {
         debug!("Handling shutdown.");
 
+        #[cfg(not(target_family = "wasm"))]
         for join_handle in self.event_loop_join_handles.drain(..) {
             if join_handle.join().is_err() {
                 error!("Failed to join on a script-thread.");
