@@ -210,6 +210,7 @@ impl Default for TimerRefreshDriver {
         #[cfg(target_family = "wasm")]
         {
             tokio::task::spawn_local(async move {
+                eprintln!("[actor] refresh_driver start");
                 let mut scheduler = TimerScheduler::default();
                 const POLL_INTERVAL: Duration = Duration::from_millis(1);
 

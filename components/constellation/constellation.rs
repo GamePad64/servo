@@ -756,6 +756,7 @@ where
         // driven by `run_async`, which yields instead of blocking on select.
         #[cfg(target_family = "wasm")]
         tokio::task::spawn_local(async move {
+            eprintln!("[actor] constellation start");
             let (script_ipc_sender, script_ipc_receiver) =
                 generic_channel::channel().expect("ipc channel failure");
             let script_receiver = script_ipc_receiver.route_preserving_errors();
