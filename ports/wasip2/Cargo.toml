@@ -12,6 +12,7 @@ rust-version.workspace = true
 # the project refers to it in prose). js_jit selects the prebuilt SpiderMonkey
 # archive; it does not enable machine-code generation, which wasm cannot do.
 servo = { path = "../../components/servo", default-features = false, features = ["js_jit"] }
+log = { workspace = true }
 tokio = { version = "1.51", features = ["rt", "time", "macros"] }
 
 [profile.release]

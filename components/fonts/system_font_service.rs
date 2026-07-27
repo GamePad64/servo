@@ -119,6 +119,7 @@ impl SystemFontService {
         // not `Send`.
         #[cfg(target_family = "wasm")]
         tokio::task::spawn_local(async move {
+            eprintln!("[actor] system_font_service start");
             let mut cache = SystemFontService {
                 port: receiver,
                 local_families: Default::default(),

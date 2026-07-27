@@ -11163,6 +11163,7 @@ dependencies = [
 name = "wasip2-shell"
 version = "0.4.0"
 dependencies = [
+ "log",
  "servo",
  "tokio",
 ]

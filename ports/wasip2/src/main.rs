@@ -24,7 +24,24 @@
 
 use std::io::Read;
 
+/// Minimal stderr logger. Servo logs through the `log` facade; without a logger
+/// installed its startup is silent, which makes a hang impossible to place.
+struct Stderr;
+impl log::Log for Stderr {
+    fn enabled(&self, _: &log::Metadata<'_>) -> bool {
+        true
+    }
+    fn log(&self, record: &log::Record<'_>) {
+        eprintln!("[{}] {}: {}", record.level(), record.target(), record.args());
+    }
+    fn flush(&self) {}
+}
+static LOGGER: Stderr = Stderr;
+
 fn main() {
+    log::set_logger(&LOGGER).ok();
+    log::set_max_level(log::LevelFilter::Debug);
+
     let mut html = String::new();
     std::io::stdin()
         .read_to_string(&mut html)
@@ -46,15 +63,23 @@ async fn run(html: &str) -> String {
     // is only required to create a WebView — so this exercises exactly what the
     // un-threading changed: the constellation, resource manager, font service and
     // timer scheduler all start as tasks on this LocalSet.
+    eprintln!("[harness] calling ServoBuilder::build()");
     let servo = servo::ServoBuilder::default().build();
+    eprintln!("[harness] build() returned");
     let mut summary = format!("SERVO BOOTED, {} bytes of HTML received", html.len());
 
     // Give the actor tasks a chance to run their first iterations.
-    for _ in 0..1000 {
+    for i in 0..1000 {
+        if i % 200 == 0 {
+            eprintln!("[harness] pump {i}");
+        }
         tokio::task::yield_now().await;
     }
     summary.push_str("; actors pumped 1000 times");
-    drop(servo);
+    // Deliberately leaked: `drop` runs Servo's shutdown, which joins on the
+    // ~11 cross-actor receives the census flagged. Testing whether the hang is
+    // in shutdown or in startup.
+    std::mem::forget(servo);
     return summary;
     #[allow(unreachable_code)]
     {
