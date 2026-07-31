@@ -655,7 +655,7 @@ where
                     );
                     (
                         Some(register),
-                        Some(join_handle),
+                        join_handle,
                         Some(background_hang_monitor_control_ipc_sender),
                     )
                 };
@@ -814,7 +814,7 @@ where
                 background_hang_monitor_sender: background_hang_monitor_ipc_sender,
                 background_hang_monitor_receiver,
                 background_monitor_register,
-                background_monitor_register_join_handle,
+                background_monitor_register_join_handle: background_monitor_register_join_handle.flatten(),
                 background_monitor_control_sender,
                 script_receiver,
                 embedder_to_constellation_receiver,

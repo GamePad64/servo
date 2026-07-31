@@ -59,8 +59,25 @@ macro_rules! submit_resource_reader {
 // Note: A weak symbol would perhaps be preferable, but that isn't available in stable rust yet.
 inventory::collect!(ResourceReader);
 
+/// Explicitly-installed reader, taking precedence over the `inventory` registry.
+///
+/// wasip2 needs this: `inventory` registers through linker sections and
+/// life-before-main, and under `wasm32-wasip2` that collection comes back empty
+/// even when the registering crate is linked and referenced. An embedder that
+/// cannot rely on `submit_resource_reader!` calls [`set_resource_reader`]
+/// instead, before anything reads a resource.
+static EXPLICIT_RESOURCE_READER: std::sync::OnceLock<ResourceReader> = std::sync::OnceLock::new();
+
+/// Install the resource reader directly. Must be called before the first read.
+pub fn set_resource_reader(reader: ResourceReader) {
+    let _ = EXPLICIT_RESOURCE_READER.set(reader);
+}
+
 static RESOURCE_READER: LazyLock<ResourceReader> = {
     LazyLock::new(|| {
+        if let Some(reader) = EXPLICIT_RESOURCE_READER.get() {
+            return *reader;
+        }
         let mut resource_reader_iterator = inventory::iter::<ResourceReader>.into_iter();
         let Some(resource_reader) = resource_reader_iterator.next() else {
             panic!("No resource reader registered");

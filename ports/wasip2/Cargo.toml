@@ -11,8 +11,11 @@ rust-version.workspace = true
 # The embedding library is the `servo` package (not `libservo` — that is only how
 # the project refers to it in prose). js_jit selects the prebuilt SpiderMonkey
 # archive; it does not enable machine-code generation, which wasm cannot do.
-servo = { path = "../../components/servo", default-features = false, features = ["js_jit"] }
+servo = { path = "../../components/servo", default-features = false, features = ["js_jit", "baked-in-resources"] }
 log = { workspace = true }
+# Referenced explicitly so the linker keeps it: the resource reader registers
+# itself through `inventory`, and a crate nothing names is dropped.
+servo-default-resources = { path = "../../components/default-resources" }
 tokio = { version = "1.51", features = ["rt", "time", "macros"] }
 
 [profile.release]

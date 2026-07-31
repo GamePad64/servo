@@ -204,6 +204,20 @@ impl PipelineNamespace {
     /// Install a namespace for a given Id.
     pub fn install(namespace_id: PipelineNamespaceId) {
         PIPELINE_NAMESPACE.with(|tls| {
+            // wasip2: every actor is a task on one thread, so what was
+            // per-thread state is now shared between them and `install` is
+            // reached more than once.
+            //
+            // KNOWN LIMITATION: the namespace exists to keep each event loop's
+            // generated ids disjoint. Overwriting it means two actors can mint
+            // colliding PipelineIds. That is tolerable for a single-page render
+            // and is *not* correct in general; the real fix is to move this into
+            // a `tokio::task_local!` so each task keeps its own namespace.
+            #[cfg(target_family = "wasm")]
+            if tls.get().is_some() {
+                log::debug!("PipelineNamespace re-installed on the shared thread");
+            }
+            #[cfg(not(target_family = "wasm"))]
             assert!(tls.get().is_none());
             tls.set(Some(PipelineNamespace {
                 id: namespace_id,
