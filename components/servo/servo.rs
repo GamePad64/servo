@@ -1366,9 +1366,11 @@ pub fn run_content_process(token: String) {
             script_join_handle
                 .join()
                 .expect("Failed to join on the script thread.");
-            background_hang_monitor_join_handle
-                .join()
-                .expect("Failed to join on the BHM background thread.");
+            if let Some(handle) = background_hang_monitor_join_handle {
+                handle
+                    .join()
+                    .expect("Failed to join on the BHM background thread.");
+            }
 
             StyleThreadPool::shutdown();
 

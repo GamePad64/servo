@@ -54,6 +54,10 @@ impl ThreadPoolState {
 /// The thread pools used throughout Servo, apart from those used by Layout and WebRender which
 /// are handled separately.
 pub struct ThreadPool {
+    /// wasip2: there are no worker threads to build a pool from, so work runs
+    /// inline on the caller. Callers already treat completion as asynchronous,
+    /// so running sooner is safe; what is lost is parallelism, not ordering.
+    #[cfg(not(target_family = "wasm"))]
     pool: rayon::ThreadPool,
     state: Arc<Mutex<ThreadPoolState>>,
 }
@@ -68,12 +72,15 @@ impl ThreadPool {
                 .map(|parallelism| parallelism.get())
                 .unwrap_or(pref!(thread_pool_fallback_workers) as usize)
                 .min(pref!(thread_pool_workers_max) as usize);
+            #[cfg(not(target_family = "wasm"))]
             let pool = rayon::ThreadPoolBuilder::new()
                 .thread_name(move |i| format!("GlobalPool#{i}"))
                 .num_threads(paralellism)
                 .build()
                 .unwrap();
+            let _ = paralellism;
             Arc::new(Self {
+                #[cfg(not(target_family = "wasm"))]
                 pool,
                 state: Arc::new(Mutex::new(ThreadPoolState::new())),
             })
@@ -102,7 +109,7 @@ impl ThreadPool {
 
         let state = self.state.clone();
 
-        self.pool.spawn(move || {
+        let run = move || {
             {
                 let mut state = state.lock().unwrap();
                 if !state.is_active() {
@@ -118,7 +125,12 @@ impl ThreadPool {
                 let mut state = state.lock().unwrap();
                 state.decrement_active();
             }
-        });
+        };
+
+        #[cfg(not(target_family = "wasm"))]
+        self.pool.spawn(run);
+        #[cfg(target_family = "wasm")]
+        run();
     }
 
     /// Prevent further work from being spawned,

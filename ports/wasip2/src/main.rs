@@ -63,6 +63,9 @@ async fn run(html: &str) -> String {
     // is only required to create a WebView — so this exercises exactly what the
     // un-threading changed: the constellation, resource manager, font service and
     // timer scheduler all start as tasks on this LocalSet.
+    // `inventory` collects nothing under wasip2, so register the reader
+    // explicitly rather than relying on life-before-main.
+    servo::resources::set_resource_reader(&servo_default_resources::DefaultResourceReader);
     eprintln!("[harness] calling ServoBuilder::build()");
     let servo = servo::ServoBuilder::default().build();
     eprintln!("[harness] build() returned");
