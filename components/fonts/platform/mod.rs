@@ -28,15 +28,25 @@ pub use crate::platform::macos::{core_text_font_cache, font, font_list};
 #[cfg(target_os = "windows")]
 pub use crate::platform::windows::{font, font_list};
 // wasip2: no native font library and no system font database. See wasm/font.rs.
+// wasip2 uses the FreeType backend for faces — it builds and runs there, and it
+// is what every other platform's fidelity is measured against — but not for
+// enumeration: that backend is fontconfig-based, and fontconfig has neither a
+// library to link nor a font database to read inside a guest.
 #[cfg(target_family = "wasm")]
-pub use crate::platform::wasm::{font, font_list};
+pub use crate::platform::freetype::font;
+#[cfg(target_family = "wasm")]
+pub use crate::platform::wasm::font_list;
 
-#[cfg(any(target_os = "linux", target_os = "android", target_os = "freebsd"))]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "android",
+    target_os = "freebsd",
+    target_family = "wasm"
+))]
 pub mod freetype;
 
 #[cfg(target_family = "wasm")]
 pub mod wasm {
-    pub mod font;
     pub mod font_list;
 }
 

@@ -121,11 +121,11 @@ version = "1"
 [dev-dependencies.winit]
 version = "0.30"
 
-[target.'cfg(any(target_os = "android", all(unix, not(any(target_os = "macos", target_os = "ios")))))'.dependencies.freetype]
+[target.'cfg(any(target_os = "android", target_family = "wasm", all(unix, not(any(target_os = "macos", target_os = "ios")))))'.dependencies.freetype]
 version = "0.8"
 default-features = false
 
-[target.'cfg(any(target_os = "android", all(unix, not(any(target_os = "macos", target_os = "ios")))))'.dependencies.libc]
+[target.'cfg(any(target_os = "android", target_family = "wasm", all(unix, not(any(target_os = "macos", target_os = "ios")))))'.dependencies.libc]
 version = "0.2"
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies.core-foundation]
@@ -143,7 +143,3 @@ version = "0.2"
 
 [target.'cfg(target_os = "windows")'.dependencies.dwrote]
 version = "0.11.5"
-
-# wasip2: pure-Rust face parsing and outline filling. No FreeType, no dlsym.
-[target.'cfg(target_family = "wasm")'.dependencies]
-ab_glyph = "0.2"
