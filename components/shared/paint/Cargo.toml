@@ -51,3 +51,9 @@ webrender_api = { workspace = true }
 # web-sys/wasm-bindgen and emits imports a component cannot resolve.
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 glow = { workspace = true }
+
+# wasip2 port: swgl is Mozilla's software GL — the same implementation Firefox
+# uses without a usable GPU. It gives WebRender a real GL to render through on
+# the CPU, which is the only rendering path available inside a component.
+[target.'cfg(target_family = "wasm")'.dependencies]
+swgl = { workspace = true }

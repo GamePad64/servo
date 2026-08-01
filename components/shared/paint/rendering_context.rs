@@ -1048,3 +1048,111 @@ mod test {
         }
     }
 }
+
+/// wasip2: a [`RenderingContext`] that rasterises on the CPU.
+///
+/// `swgl` is Mozilla's software implementation of GL — the same one Firefox
+/// falls back to without a usable GPU. It implements `gleam`'s `Gl` trait, which
+/// is exactly what WebRender consumes, so no adapter sits between them: WebRender
+/// issues ordinary GL calls and swgl rasterises them into a plain memory buffer.
+///
+/// This is what makes rendering possible inside a component at all. There is no
+/// GPU, no display server, and no `wasi-gpu` proposal to bind to, so a software
+/// GL is not a fallback here — it is the only path.
+#[cfg(target_family = "wasm")]
+pub struct SoftwareRenderingContext {
+    gl: Rc<swgl::Context>,
+    size: Cell<PhysicalSize<u32>>,
+}
+
+#[cfg(target_family = "wasm")]
+impl SoftwareRenderingContext {
+    pub fn new(size: PhysicalSize<u32>) -> Result<Self, Error> {
+        if size.width == 0 || size.height == 0 {
+            return Err(Error::Failed);
+        }
+        let gl = swgl::Context::create();
+        gl.make_current();
+        let context = SoftwareRenderingContext {
+            gl: Rc::new(gl),
+            size: Cell::new(size),
+        };
+        context.allocate_framebuffer(size);
+        Ok(context)
+    }
+
+    /// Point swgl's default framebuffer at a buffer of the requested size.
+    /// Passing a null pointer makes swgl own the allocation.
+    fn allocate_framebuffer(&self, size: PhysicalSize<u32>) {
+        self.gl.init_default_framebuffer(
+            0,
+            0,
+            size.width as i32,
+            size.height as i32,
+            0,
+            std::ptr::null_mut(),
+        );
+    }
+}
+
+#[cfg(target_family = "wasm")]
+impl RenderingContext for SoftwareRenderingContext {
+    fn size(&self) -> PhysicalSize<u32> {
+        self.size.get()
+    }
+
+    fn resize(&self, size: PhysicalSize<u32>) {
+        self.size.set(size);
+        self.allocate_framebuffer(size);
+    }
+
+    fn make_current(&self) -> Result<(), Error> {
+        self.gl.make_current();
+        Ok(())
+    }
+
+    fn gleam_gl_api(&self) -> Rc<dyn gleam::gl::Gl> {
+        self.gl.clone()
+    }
+
+    /// Nothing to present to: the pixels are read out with [`Self::read_to_image`].
+    fn present(&self) {}
+
+    /// The paint layer keeps a surfman connection per painter. On wasm surfman
+    /// is the null backend — a connection carries no state and opening one
+    /// always succeeds — so this hands back a live handle even though no device
+    /// will ever be created from it.
+    fn connection(&self) -> Option<Connection> {
+        Connection::new().ok()
+    }
+
+    #[expect(unsafe_code)]
+    fn read_to_image(&self, source_rectangle: DeviceIntRect) -> Option<RgbaImage> {
+        let (data, width, height, stride) = self.gl.get_color_buffer(0, true);
+        if data.is_null() || width <= 0 || height <= 0 {
+            return None;
+        }
+        // swgl hands back BGRA rows of `stride` bytes in OpenGL order, so row 0
+        // is the *bottom* of the frame. Crop to the requested rectangle, walk
+        // the rows back to top-down, and swizzle into the RGBA an `RgbaImage`
+        // expects.
+        let stride = stride as usize;
+        let src = unsafe {
+            std::slice::from_raw_parts(data as *const u8, stride * height as usize)
+        };
+        let x0 = source_rectangle.min.x.max(0) as usize;
+        let y0 = source_rectangle.min.y.max(0) as usize;
+        let w = (source_rectangle.width() as usize).min(width as usize - x0.min(width as usize));
+        let h = (source_rectangle.height() as usize).min(height as usize - y0.min(height as usize));
+        let mut out = Vec::with_capacity(w * h * 4);
+        for row in 0..h {
+            let source_row = height as usize - 1 - (y0 + row);
+            let base = source_row * stride + x0 * 4;
+            for col in 0..w {
+                let p = base + col * 4;
+                out.extend_from_slice(&[src[p + 2], src[p + 1], src[p], src[p + 3]]);
+            }
+        }
+        RgbaImage::from_raw(w as u32, h as u32, out)
+    }
+}
