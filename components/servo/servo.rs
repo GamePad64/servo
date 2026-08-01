@@ -273,6 +273,8 @@ impl ServoInner {
             let paint = self.paint.borrow();
             let mut messages = Vec::new();
             while let Ok(message) = paint.receiver().try_recv() {
+                if messages.len() % 10000 == 0 && !messages.is_empty() {
+                }
                 match message {
                     Ok(message) => messages.push(message),
                     Err(error) => {

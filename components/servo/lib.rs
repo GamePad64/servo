@@ -75,13 +75,17 @@ pub use net_traits::CookieSource;
 // fleshed out public domains API if we want to expose it.
 pub use net_traits::pub_domains::is_reg_domain;
 pub use paint::WebRenderDebugOption;
+pub use dpi::PhysicalSize;
 pub use paint_api::rendering_context::RenderingContext;
 // wasip2 port: the concrete rendering contexts are OpenGL implementations over
 // surfman and are gated out of the wasm build; only the trait survives.
 #[cfg(not(target_family = "wasm"))]
 pub use paint_api::rendering_context::{
-    OffscreenRenderingContext, SoftwareRenderingContext, WindowRenderingContext,
+    OffscreenRenderingContext, WindowRenderingContext,
 };
+// The software context exists on every target — on wasm it is the swgl-backed
+// one, which is the only way to rasterise inside a component.
+pub use paint_api::rendering_context::SoftwareRenderingContext;
 // Expose our profile traits for servoshell, so we can instrument code there, but don't
 // add it as an official API.
 #[doc(hidden)]

@@ -214,6 +214,11 @@ impl Painter {
             .map(|i| i.get())
             .unwrap_or(pref!(thread_pool_fallback_workers) as usize)
             .min(pref!(thread_pool_webrender_workers_max).max(1) as usize);
+        // wasip2: WebRender accepts `None` and then does its scene building on
+        // the calling thread — which is the only thread there is.
+        #[cfg(target_family = "wasm")]
+        let workers = None;
+        #[cfg(not(target_family = "wasm"))]
         let workers = Some(Arc::new(
             rayon::ThreadPoolBuilder::new()
                 .num_threads(worker_threads)
@@ -221,6 +226,7 @@ impl Painter {
                 .build()
                 .expect("Unable to initialize WebRender worker pool."),
         ));
+        let _ = worker_threads;
 
         let painter_id = PainterId::next();
         let (mut webrender_renderer, webrender_api_sender) = webrender::create_webrender_instance(
@@ -261,6 +267,10 @@ impl Painter {
 
         let webrender_api = webrender_api_sender.create_api_by_client(painter_id.into());
         let webrender_document = webrender_api.add_document(rendering_context.size2d().to_i32());
+        // Ask for the shared hit tester now, while nothing is waiting on it.
+        // See `shared_hit_tester`.
+        #[cfg(target_family = "wasm")]
+        request_hit_tester(&webrender_api, webrender_document);
 
         let gl_renderer = webrender_gl.get_string(gleam::gl::RENDERER);
         let gl_version = webrender_gl.get_string(gleam::gl::VERSION);
@@ -568,6 +578,15 @@ impl Painter {
     ) -> Vec<PaintHitTestResult> {
         // DevicePoint and WorldPoint are the same for us.
         let world_point = WorldPoint::from_untyped(point.to_untyped());
+
+        #[cfg(target_family = "wasm")]
+        let results = match shared_hit_tester(webrender_api, webrender_document) {
+            Some(hit_tester) => hit_tester.hit_test(world_point),
+            // The backend has not answered yet; report no hits rather than
+            // blocking for an answer that cannot arrive. See `shared_hit_tester`.
+            None => return Vec::new(),
+        };
+        #[cfg(not(target_family = "wasm"))]
         let results = webrender_api.hit_test(webrender_document, world_point);
 
         results
@@ -1601,4 +1620,59 @@ pub(crate) enum PaintMetricState {
     Seen(WebRenderEpoch, bool /* first_reflow */),
     /// The metric has been sent to the constellation and no more work needs to be done.
     Sent,
+}
+
+/// wasip2: one hit tester per document, kept so input never blocks.
+///
+/// `RenderApi::hit_test` sends the render backend a message and waits for the
+/// reply. Here the backend is a task on this same thread, so it cannot answer
+/// while we block — a single click would wedge the engine. The backend also
+/// hands out a *shared* hit tester which it keeps current as frames change, so
+/// ask for one when the document is created and query it locally from then on.
+#[cfg(target_family = "wasm")]
+enum HitTesterSlot {
+    /// Requested; the backend has not replied yet.
+    Pending(webrender_api::HitTesterRequest),
+    Ready(std::sync::Arc<dyn webrender_api::ApiHitTester>),
+}
+
+#[cfg(target_family = "wasm")]
+thread_local! {
+    static HIT_TESTERS: std::cell::RefCell<
+        std::collections::HashMap<DocumentId, HitTesterSlot>,
+    > = std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// Ask the backend for `document`'s hit tester without waiting for it.
+#[cfg(target_family = "wasm")]
+fn request_hit_tester(webrender_api: &RenderApi, document: DocumentId) {
+    let request = webrender_api.request_hit_tester(document);
+    HIT_TESTERS.with(|testers| {
+        testers
+            .borrow_mut()
+            .insert(document, HitTesterSlot::Pending(request));
+    });
+}
+
+/// The hit tester for `document`, if the backend has handed one over yet.
+#[cfg(target_family = "wasm")]
+fn shared_hit_tester(
+    webrender_api: &RenderApi,
+    document: DocumentId,
+) -> Option<std::sync::Arc<dyn webrender_api::ApiHitTester>> {
+    HIT_TESTERS.with(|testers| {
+        let mut testers = testers.borrow_mut();
+        let slot = testers
+            .entry(document)
+            .or_insert_with(|| HitTesterSlot::Pending(webrender_api.request_hit_tester(document)));
+        if let HitTesterSlot::Pending(request) = slot {
+            if let Ok(hit_tester) = request.rx.try_recv() {
+                *slot = HitTesterSlot::Ready(hit_tester);
+            }
+        }
+        match slot {
+            HitTesterSlot::Ready(hit_tester) => Some(hit_tester.clone()),
+            HitTesterSlot::Pending(_) => None,
+        }
+    })
 }
