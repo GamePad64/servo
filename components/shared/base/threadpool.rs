@@ -129,8 +129,13 @@ impl ThreadPool {
 
         #[cfg(not(target_family = "wasm"))]
         self.pool.spawn(run);
+        // wasip2 has no pool to hand this to, but it must not run *here*:
+        // callers spawn work that takes locks they are still holding, which on
+        // one thread is a re-entrant lock — and `parking_lot` answers that by
+        // panicking ("Parking not supported on this platform") rather than
+        // deadlocking. Deferring to a task preserves the native ordering.
         #[cfg(target_family = "wasm")]
-        run();
+        tokio::task::spawn(async move { run() });
     }
 
     /// Prevent further work from being spawned,

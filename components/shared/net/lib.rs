@@ -6,6 +6,8 @@
 
 use std::fmt::{self, Debug, Display};
 use std::sync::{LazyLock, OnceLock};
+use std::ops::ControlFlow;
+#[cfg(not(target_family = "wasm"))]
 use std::thread::{self, JoinHandle};
 
 use content_security_policy::{self as csp};
@@ -854,6 +856,15 @@ pub struct FetchThread {
     to_fetch_sender: IpcSender<FetchResponseMsg>,
 }
 
+/// What [`FetchThreadHandle`] holds to wait for the fetch loop to finish.
+///
+/// wasip2 has no threads, so the loop is a task on the caller's `LocalSet` and
+/// there is nothing to join. See [`FetchThread::run_async`].
+#[cfg(not(target_family = "wasm"))]
+type FetchLoopHandle = JoinHandle<()>;
+#[cfg(target_family = "wasm")]
+type FetchLoopHandle = ();
+
 impl FetchThread {
     fn spawn() -> FetchThreadHandle {
         let (sender, receiver) = unbounded();
@@ -867,6 +878,7 @@ impl FetchThread {
                 let _ = sender_clone.send(ToFetchThreadMessage::FetchResponse(message));
             }),
         );
+        #[cfg(not(target_family = "wasm"))]
         let join_handle = thread::Builder::new()
             .name("FetchThread".to_owned())
             .spawn(move || {
@@ -878,6 +890,17 @@ impl FetchThread {
                 fetch_thread.run();
             })
             .expect("Thread spawning failed");
+        #[cfg(target_family = "wasm")]
+        let join_handle = {
+            tokio::task::spawn_local(async move {
+                let mut fetch_thread = FetchThread {
+                    active_fetches: FxHashMap::default(),
+                    receiver,
+                    to_fetch_sender,
+                };
+                fetch_thread.run_async().await;
+            });
+        };
         FetchThreadHandle {
             sender,
             join_handle: RwLock::new(Some(join_handle)),
@@ -885,67 +908,96 @@ impl FetchThread {
     }
 
     fn run(&mut self) {
-        loop {
-            match self.receiver.recv() {
-                Ok(ToFetchThreadMessage::StartFetch(
-                    request_builder,
-                    response_init,
-                    callback,
-                    core_resource_thread,
-                )) => {
-                    let request_builder_id = request_builder.id;
-
-                    // Only redirects have a `response_init` field.
-                    let message = match response_init {
-                        Some(response_init) => CoreResourceMsg::FetchRedirect(
-                            request_builder,
-                            response_init,
-                            self.to_fetch_sender.clone(),
-                        ),
-                        None => CoreResourceMsg::Fetch(
-                            request_builder,
-                            FetchChannels::ResponseMsg(self.to_fetch_sender.clone()),
-                        ),
-                    };
-
-                    if core_resource_thread.send(message).is_err() {
-                        // In this case the connection with the resource threads has been
-                        // broken, so just assume that we are shutting down as any further
-                        // messaging is likely to be unreliable.
-                        break;
-                    }
-
-                    let preexisting_fetch =
-                        self.active_fetches.insert(request_builder_id, callback);
-                    // When we terminate a fetch group, all deferred fetches are processed.
-                    // In case we were already processing a deferred fetch, we should not
-                    // process the second call. This should be handled by [`DeferredFetchRecord::process`]
-                    assert!(preexisting_fetch.is_none());
-                },
-                Ok(ToFetchThreadMessage::FetchResponse(fetch_response_msg)) => {
-                    let request_id = fetch_response_msg.request_id();
-                    let fetch_finished =
-                        matches!(fetch_response_msg, FetchResponseMsg::ProcessResponseEOF(..));
-
-                    self.active_fetches
-                        .get_mut(&request_id)
-                        .expect("Got fetch response for unknown fetch")(
-                        fetch_response_msg
-                    );
-
-                    if fetch_finished {
-                        self.active_fetches.remove(&request_id);
-                    }
-                },
-                Ok(ToFetchThreadMessage::Cancel(request_ids, core_resource_thread)) => {
-                    // Errors are ignored here, because Servo sends many cancellation requests when shutting down.
-                    // At this point the networking task might be shut down completely, so just ignore errors
-                    // during this time.
-                    let _ = core_resource_thread.send(CoreResourceMsg::Cancel(request_ids));
-                },
-                Ok(ToFetchThreadMessage::Exit) | Err(_) => break,
+        while let Ok(message) = self.receiver.recv() {
+            if self.handle_message(message) == ControlFlow::Break(()) {
+                break;
             }
         }
+    }
+
+    /// [`run`](Self::run), but as a task rather than a thread.
+    ///
+    /// wasip2 has no threads, so this loop shares one runtime with every other
+    /// Servo actor. A blocking `recv()` would stall all of them, so it polls and
+    /// yields instead.
+    #[cfg(target_family = "wasm")]
+    async fn run_async(&mut self) {
+        loop {
+            match self.receiver.try_recv() {
+                Ok(message) => {
+                    if self.handle_message(message) == ControlFlow::Break(()) {
+                        return;
+                    }
+                },
+                Err(crossbeam_channel::TryRecvError::Empty) => {},
+                Err(crossbeam_channel::TryRecvError::Disconnected) => return,
+            }
+            tokio::task::yield_now().await;
+        }
+    }
+
+    /// Act on one message. [`ControlFlow::Break`] ends the loop.
+    fn handle_message(&mut self, message: ToFetchThreadMessage) -> ControlFlow<()> {
+        match message {
+            ToFetchThreadMessage::StartFetch(
+                request_builder,
+                response_init,
+                callback,
+                core_resource_thread,
+            ) => {
+                let request_builder_id = request_builder.id;
+
+                // Only redirects have a `response_init` field.
+                let message = match response_init {
+                    Some(response_init) => CoreResourceMsg::FetchRedirect(
+                        request_builder,
+                        response_init,
+                        self.to_fetch_sender.clone(),
+                    ),
+                    None => CoreResourceMsg::Fetch(
+                        request_builder,
+                        FetchChannels::ResponseMsg(self.to_fetch_sender.clone()),
+                    ),
+                };
+
+                if core_resource_thread.send(message).is_err() {
+                    // In this case the connection with the resource threads has been
+                    // broken, so just assume that we are shutting down as any further
+                    // messaging is likely to be unreliable.
+                    return ControlFlow::Break(());
+                }
+
+                let preexisting_fetch =
+                    self.active_fetches.insert(request_builder_id, callback);
+                // When we terminate a fetch group, all deferred fetches are processed.
+                // In case we were already processing a deferred fetch, we should not
+                // process the second call. This should be handled by [`DeferredFetchRecord::process`]
+                assert!(preexisting_fetch.is_none());
+            },
+            ToFetchThreadMessage::FetchResponse(fetch_response_msg) => {
+                let request_id = fetch_response_msg.request_id();
+                let fetch_finished =
+                    matches!(fetch_response_msg, FetchResponseMsg::ProcessResponseEOF(..));
+
+                self.active_fetches
+                    .get_mut(&request_id)
+                    .expect("Got fetch response for unknown fetch")(
+                    fetch_response_msg
+                );
+
+                if fetch_finished {
+                    self.active_fetches.remove(&request_id);
+                }
+            },
+            ToFetchThreadMessage::Cancel(request_ids, core_resource_thread) => {
+                // Errors are ignored here, because Servo sends many cancellation requests when shutting down.
+                // At this point the networking task might be shut down completely, so just ignore errors
+                // during this time.
+                let _ = core_resource_thread.send(CoreResourceMsg::Cancel(request_ids));
+            },
+            ToFetchThreadMessage::Exit => return ControlFlow::Break(()),
+        }
+        ControlFlow::Continue(())
     }
 
     fn fetch_async(
@@ -979,17 +1031,22 @@ impl FetchThread {
             return;
         };
         let _ = fetch_thread.sender.send(ToFetchThreadMessage::Exit);
+        #[cfg(not(target_family = "wasm"))]
         if let Some(join_handle) = fetch_thread.join_handle.write().take() {
             join_handle
                 .join()
                 .expect("Failed to join on the FetchThread join handle.");
+        }
+        #[cfg(target_family = "wasm")]
+        {
+            let _ = fetch_thread.join_handle.write().take();
         }
     }
 }
 
 struct FetchThreadHandle {
     sender: Sender<ToFetchThreadMessage>,
-    join_handle: RwLock<Option<JoinHandle<()>>>,
+    join_handle: RwLock<Option<FetchLoopHandle>>,
 }
 
 static FETCH_THREAD: OnceLock<FetchThreadHandle> = OnceLock::new();

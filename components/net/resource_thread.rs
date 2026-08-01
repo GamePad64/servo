@@ -192,7 +192,6 @@ pub fn new_core_resource_thread(
     // select loop awaits instead of blocking so the actors that feed it can run.
     #[cfg(target_family = "wasm")]
     tokio::task::spawn_local(async move {
-        eprintln!("[actor] resource_manager start");
         let resource_manager = CoreResourceManager::new(
             devtools_sender,
             time_profiler_chan,
@@ -320,7 +319,6 @@ impl ResourceChannelManager {
         Arc<HttpState>,
         Arc<HttpState>,
     ) {
-        eprintln!("[actor] resource_manager: create_http_states()");
         let (public_http_state, private_http_state) = create_http_states(
             self.config_dir.as_deref(),
             self.ca_certificates.clone(),
@@ -396,7 +394,6 @@ impl ResourceChannelManager {
         protocols: Arc<ProtocolRegistry>,
         embedder_proxy: GenericEmbedderProxy<NetToEmbedderMsg>,
     ) {
-        eprintln!("[actor] resource_manager: setup()");
         let (mut rx_set, ids, public_http_state, private_http_state) = self.setup(
             public_receiver,
             private_receiver,
@@ -405,7 +402,6 @@ impl ResourceChannelManager {
             refresh_receiver,
             embedder_proxy,
         );
-        eprintln!("[actor] resource_manager: setup done, entering select loop");
         let mut selector = rx_set.selector();
 
         loop {

@@ -151,9 +151,13 @@ impl BackgroundHangMonitorChan {
     }
 
     fn send(&self, msg: MonitoredComponentMsg) {
-        self.sender
-            .send((self.component_id.clone(), msg))
-            .expect("BHM is gone");
+        let result = self.sender.send((self.component_id.clone(), msg));
+        // wasip2: the monitor thread is never started, so its receiver is closed
+        // and every send fails. That is expected here, not a lost message.
+        #[cfg(not(target_family = "wasm"))]
+        result.expect("BHM is gone");
+        #[cfg(target_family = "wasm")]
+        drop(result);
     }
 }
 
