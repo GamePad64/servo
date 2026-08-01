@@ -63,6 +63,10 @@ pub use accesskit;
 pub use embedder_traits::user_contents::UserScript;
 pub use embedder_traits::{submit_resource_reader, *};
 pub use image::RgbaImage;
+// wasip2: there is no system font database in a guest, so the embedder supplies
+// the faces to render with. See `fonts_traits::set_builtin_fonts`.
+#[cfg(target_family = "wasm")]
+pub use fonts::{BuiltinFont, set_builtin_fonts};
 pub use keyboard_types::{
     Code, CompositionEvent, CompositionState, Key, KeyState, Location, Modifiers, NamedKey,
 };

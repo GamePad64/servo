@@ -5,7 +5,8 @@
 use malloc_size_of_derive::MallocSizeOf;
 pub use platform::LocalFontIdentifier;
 #[cfg(target_family = "wasm")]
-pub use platform::{BUILTIN_FONTS, builtin_font_data};
+#[cfg(target_family = "wasm")]
+pub use platform::{BuiltinFont, builtin_font_data, builtin_fonts, set_builtin_fonts};
 use serde::{Deserialize, Serialize};
 use servo_url::ServoUrl;
 use uuid::Uuid;
@@ -111,35 +112,31 @@ mod platform {
 
     use crate::{FontData, FontDataAndIndex};
 
-    /// Faces compiled into the component.
+    /// Faces the embedder has supplied, addressed by a `builtin:` path.
     ///
     /// A wasm guest has no system font database and may have no readable
-    /// filesystem either, so a build that has to render text must carry its own
-    /// faces. They are addressed by a `builtin:` path, which
-    /// [`LocalFontIdentifier::font_data_and_index`] resolves directly.
-    ///
-    /// DejaVu, under the Bitstream Vera licence — see `builtin/LICENSE`.
-    pub const BUILTIN_FONTS: &[(&str, &str, &[u8])] = &[
-        (
-            "DejaVu Sans",
-            "builtin:DejaVuSans",
-            include_bytes!("builtin/DejaVuSans.ttf"),
-        ),
-        (
-            "DejaVu Serif",
-            "builtin:DejaVuSerif",
-            include_bytes!("builtin/DejaVuSerif.ttf"),
-        ),
-        (
-            "DejaVu Sans Mono",
-            "builtin:DejaVuSansMono",
-            include_bytes!("builtin/DejaVuSansMono.ttf"),
-        ),
-    ];
+    /// filesystem either, so a build that has to render text carries its own
+    /// faces. *Which* faces is the embedder's business, not this crate's — it
+    /// registers them here, the way it registers a resource reader.
+    pub type BuiltinFont = (&'static str, &'static str, &'static [u8]);
 
-    /// The bytes behind a `builtin:` path, if it names one.
+    static BUILTIN_FONTS: std::sync::OnceLock<&'static [BuiltinFont]> =
+        std::sync::OnceLock::new();
+
+    /// Supply the faces to use. Call before starting Servo; later calls are
+    /// ignored, as there is no way to invalidate faces already in use.
+    pub fn set_builtin_fonts(fonts: &'static [BuiltinFont]) {
+        let _ = BUILTIN_FONTS.set(fonts);
+    }
+
+    /// The registered faces, as `(family, path, bytes)`.
+    pub fn builtin_fonts() -> &'static [BuiltinFont] {
+        BUILTIN_FONTS.get().copied().unwrap_or(&[])
+    }
+
+    /// The bytes behind a `builtin:` path, if it names a registered face.
     pub fn builtin_font_data(path: &str) -> Option<&'static [u8]> {
-        BUILTIN_FONTS
+        builtin_fonts()
             .iter()
             .find(|(_, builtin_path, _)| *builtin_path == path)
             .map(|(_, _, data)| *data)

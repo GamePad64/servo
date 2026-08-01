@@ -13,7 +13,9 @@
 //! font, or a face read from a preopened directory. Those go through
 //! `FontIdentifier::Web`/`ArrayBuffer` and never consult this module.
 
-use fonts_traits::{BUILTIN_FONTS, FontIdentifier, FontTemplate, FontTemplateDescriptor, LocalFontIdentifier};
+use fonts_traits::{
+    FontIdentifier, FontTemplate, FontTemplateDescriptor, LocalFontIdentifier, builtin_fonts,
+};
 use style::Atom;
 use style::values::computed::font::GenericFontFamily;
 
@@ -24,7 +26,7 @@ pub(crate) fn for_each_available_family<F>(mut callback: F)
 where
     F: FnMut(String),
 {
-    for (family, _, _) in BUILTIN_FONTS {
+    for (family, _, _) in builtin_fonts() {
         callback((*family).to_owned());
     }
 }
@@ -34,7 +36,7 @@ pub(crate) fn for_each_variation<F>(family_name: &str, mut callback: F)
 where
     F: FnMut(FontTemplate),
 {
-    for (family, path, _) in BUILTIN_FONTS {
+    for (family, path, _) in builtin_fonts() {
         if !family.eq_ignore_ascii_case(family_name) {
             continue;
         }
