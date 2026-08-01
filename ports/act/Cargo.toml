@@ -1,0 +1,32 @@
+[package]
+name = "servo-act"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+publish = false
+rust-version.workspace = true
+
+[dependencies]
+# The embedding library is the `servo` package (not `libservo` — that is only how
+# the project refers to it in prose). js_jit selects the prebuilt SpiderMonkey
+# archive; it does not enable machine-code generation, which wasm cannot do.
+servo = { path = "../../components/servo", default-features = false, features = ["js_jit", "baked-in-resources"] }
+# Referenced explicitly so the linker keeps it: the resource reader registers
+# itself through `inventory`, and a crate nothing names is dropped.
+servo-default-resources = { path = "../../components/default-resources" }
+act-sdk = { path = "/mnt/devenv/workspace/act/act-sdk-rs/act-sdk" }
+wit-bindgen = { version = "0.58", features = ["async-spawn"] }
+serde = { workspace = true, features = ["derive"] }
+schemars = "1"
+base64 = "0.22"
+image = { workspace = true, features = ["png"] }
+log = { workspace = true }
+euclid = { workspace = true }
+tokio = { version = "1.51", features = ["rt", "time", "macros", "net", "io-util"] }
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+opt-level = "s"
