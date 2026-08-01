@@ -9,6 +9,8 @@
 //! You should almost never need to add a data type to this crate. Instead look for
 //! a more shared crate that has fewer dependents.
 
+#[cfg(target_family = "wasm")]
+pub mod wasip2;
 pub mod cross_process_instant;
 pub mod generic_channel;
 pub mod id;

@@ -923,16 +923,19 @@ impl FetchThread {
     #[cfg(target_family = "wasm")]
     async fn run_async(&mut self) {
         loop {
-            match self.receiver.try_recv() {
-                Ok(message) => {
-                    if self.handle_message(message) == ControlFlow::Break(()) {
-                        return;
-                    }
-                },
-                Err(crossbeam_channel::TryRecvError::Empty) => {},
-                Err(crossbeam_channel::TryRecvError::Disconnected) => return,
+            let receiver = &self.receiver;
+            let Ok(message) = servo_base::wasip2::poll_until(|| match receiver.try_recv() {
+                Ok(message) => Some(Ok(message)),
+                Err(crossbeam_channel::TryRecvError::Empty) => None,
+                Err(crossbeam_channel::TryRecvError::Disconnected) => Some(Err(())),
+            })
+            .await
+            else {
+                return;
+            };
+            if self.handle_message(message) == ControlFlow::Break(()) {
+                return;
             }
-            tokio::task::yield_now().await;
         }
     }
 

@@ -197,32 +197,28 @@ impl<'a, T: Serialize + for<'de> Deserialize<'de>> Selector<'a, T> {
     /// spins with cooperative yielding rather than parking the task.
     #[cfg(target_family = "wasm")]
     pub async fn select_async(&mut self) -> Vec<GenericSelectionResult<T>> {
-        loop {
-            match &mut self.inner {
-                SelectorInner::Ipc(_) => {
-                    // `use_ipc()` is false in a wasm guest — a component is a
-                    // single process — so this arm is unreachable in practice.
-                    return self.select();
-                },
-                SelectorInner::Crossbeam { receivers, sel } => {
-                    if let Ok(selected) = sel.try_select() {
-                        let index = selected.index();
-                        let selection_result = match receivers.get(index) {
-                            None => GenericSelectionResult::ChannelClosed(index as u64),
-                            Some(receiver) => match selected.recv(receiver) {
-                                Ok(Ok(value)) => {
-                                    GenericSelectionResult::MessageReceived(index as u64, value)
-                                },
-                                Ok(Err(error)) => GenericSelectionResult::Error(error.to_string()),
-                                Err(_) => GenericSelectionResult::ChannelClosed(index as u64),
-                            },
-                        };
-                        return vec![selection_result];
-                    }
-                    tokio::task::yield_now().await;
-                },
-            }
+        // `use_ipc()` is false in a wasm guest — a component is a single
+        // process — so this arm is unreachable in practice.
+        if matches!(self.inner, SelectorInner::Ipc(_)) {
+            return self.select();
         }
+        let SelectorInner::Crossbeam { receivers, sel } = &mut self.inner else {
+            unreachable!("the Ipc case returned above");
+        };
+
+        crate::wasip2::poll_until(|| {
+            let selected = sel.try_select().ok()?;
+            let index = selected.index();
+            Some(vec![match receivers.get(index) {
+                None => GenericSelectionResult::ChannelClosed(index as u64),
+                Some(receiver) => match selected.recv(receiver) {
+                    Ok(Ok(value)) => GenericSelectionResult::MessageReceived(index as u64, value),
+                    Ok(Err(error)) => GenericSelectionResult::Error(error.to_string()),
+                    Err(_) => GenericSelectionResult::ChannelClosed(index as u64),
+                },
+            }])
+        })
+        .await
     }
 
     /// Block until at least one of the Receivers receives a message.
