@@ -100,5 +100,11 @@ winapi = { workspace = true }
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ohos_mock)'] }
 
 # wasip2 port: the system font service runs as a LocalSet task, not an OS thread.
+# FreeType builds and runs inside the guest, so faces go through the same backend
+# the native platforms use. It is bundled because there is no system library to
+# find, and the vendored build script drops PNG support -- libpng needs a zlib
+# that wasi-sysroot does not carry.
 [target.'cfg(target_family = "wasm")'.dependencies]
 tokio = { workspace = true, features = ["rt"] }
+freetype-sys = { workspace = true, features = ["bundled"] }
+servo-allocator = { workspace = true }

@@ -41,22 +41,26 @@ extern crate malloc_size_of;
 pub mod platform {
     #[cfg(any(target_os = "macos", target_os = "ios"))]
     pub use crate::platform::macos::font;
-    #[cfg(any(target_os = "android", all(unix, not(any(target_os = "ios", target_os = "macos")))))]
+    // wasip2 uses the FreeType backend: it builds and runs inside a guest, and
+    // sharing it with the native platforms keeps glyph output identical.
+    #[cfg(any(
+        target_os = "android",
+        target_family = "wasm",
+        all(unix, not(any(target_os = "ios", target_os = "macos")))
+    ))]
     pub use crate::platform::unix::font;
     #[cfg(target_os = "windows")]
     pub use crate::platform::windows::font;
-    #[cfg(target_family = "wasm")]
-    pub use crate::platform::wasm::font;
 
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     pub mod macos {
         pub mod font;
     }
-    #[cfg(target_family = "wasm")]
-    pub mod wasm {
-        pub mod font;
-    }
-    #[cfg(any(target_os = "android", all(unix, not(any(target_os = "macos", target_os = "ios")))))]
+    #[cfg(any(
+        target_os = "android",
+        target_family = "wasm",
+        all(unix, not(any(target_os = "macos", target_os = "ios")))
+    ))]
     pub mod unix {
         pub mod font;
     }

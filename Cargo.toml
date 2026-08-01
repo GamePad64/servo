@@ -466,6 +466,10 @@ webrender_api = { path = "third_party/webrender_api" }
 # task instead of a thread (see third_party/ipc-channel/src/router.rs).
 ipc-channel = { path = "third_party/ipc-channel" }
 
+# wasip2 port: freetype-sys vendored so its bundled build can skip libpng, which
+# needs a zlib that wasi-sysroot does not have. FreeType itself needs no changes.
+freetype-sys = { path = "third_party/freetype-sys" }
+
 
 # For WebRender:
 #

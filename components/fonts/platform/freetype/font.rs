@@ -103,45 +103,65 @@ impl PlatformFontMethods for PlatformFont {
         variations: &[FontVariation],
         synthetic_bold: bool,
     ) -> Result<PlatformFont, &'static str> {
-        let library = FreeTypeLibraryHandle::get().lock();
-        let Ok(filename) = CString::new(&*font_identifier.path) else {
-            return Err("filename contains null byte!");
-        };
+        // wasip2: a "local" face is either compiled into the component or read
+        // from a preopened directory, and `font_data_and_index` resolves both.
+        // Either way FreeType is handed bytes rather than a path.
+        #[cfg(target_family = "wasm")]
+        {
+            let data_and_index = font_identifier
+                .font_data_and_index()
+                .ok_or("could not read font face")?;
+            return Self::new_from_data(
+                FontIdentifier::Local(font_identifier),
+                &data_and_index.data,
+                requested_size,
+                variations,
+                synthetic_bold,
+            );
+        }
 
-        let face = FreeTypeFace::new_from_file(
-            &library,
-            &filename,
-            font_identifier.face_index_for_freetype(),
-        )?;
+        #[cfg(not(target_family = "wasm"))]
+        {
+            let library = FreeTypeLibraryHandle::get().lock();
+            let Ok(filename) = CString::new(&*font_identifier.path) else {
+                return Err("filename contains null byte!");
+            };
 
-        let normalized_variations = face.set_variations_for_font(variations, &library)?;
+            let face = FreeTypeFace::new_from_file(
+                &library,
+                &filename,
+                font_identifier.face_index_for_freetype(),
+            )?;
 
-        let (requested_face_size, actual_face_size) = match requested_size {
-            Some(requested_size) => (requested_size, face.set_size(requested_size)?),
-            None => (Au::zero(), Au::zero()),
-        };
+            let normalized_variations = face.set_variations_for_font(variations, &library)?;
 
-        let Ok(memory_mapped_font_data) =
-            File::open(&*font_identifier.path).and_then(|file| unsafe { Mmap::map(&file) })
-        else {
-            return Err("Could not memory map");
-        };
+            let (requested_face_size, actual_face_size) = match requested_size {
+                Some(requested_size) => (requested_size, face.set_size(requested_size)?),
+                None => (Au::zero(), Au::zero()),
+            };
 
-        let table_provider_data = FreeTypeFaceTableProviderData::Local(
-            Arc::new(memory_mapped_font_data),
-            font_identifier.index(),
-        );
+            let Ok(memory_mapped_font_data) =
+                File::open(&*font_identifier.path).and_then(|file| unsafe { Mmap::map(&file) })
+            else {
+                return Err("Could not memory map");
+            };
 
-        let synthetic_bold = table_provider_data.should_apply_synthetic_bold(synthetic_bold);
+            let table_provider_data = FreeTypeFaceTableProviderData::Local(
+                Arc::new(memory_mapped_font_data),
+                font_identifier.index(),
+            );
 
-        Ok(PlatformFont {
-            face: ReentrantMutex::new(face),
-            requested_face_size,
-            actual_face_size,
-            table_provider_data,
-            variations: normalized_variations,
-            synthetic_bold,
-        })
+            let synthetic_bold = table_provider_data.should_apply_synthetic_bold(synthetic_bold);
+
+            Ok(PlatformFont {
+                face: ReentrantMutex::new(face),
+                requested_face_size,
+                actual_face_size,
+                table_provider_data,
+                variations: normalized_variations,
+                synthetic_bold,
+            })
+        }
     }
 
     fn descriptor(&self) -> FontTemplateDescriptor {
