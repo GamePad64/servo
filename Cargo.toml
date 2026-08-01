@@ -5,7 +5,6 @@ members = [
     "components/xpath",
     "ffi/capi",
     "ports/servoshell",
-    "ports/wasip2",
     "tests/capi",
     "tests/unit/*",
 ]
@@ -441,34 +440,22 @@ codegen-units = 1
 # web_atoms = { path = "../html5ever/web_atoms" }
 # xml5ever = { path = "../html5ever/xml5ever" }
 #
-# wasip2 port: wr_glyph_rasterizer 0.70.0 vendored under third_party/ with a
-# wasm font backend added. WebRender matches no font backend when
-# target_family = "wasm" (its `unix` arm is false), which is a compile error.
-# The vendored copy is byte-identical to the crates.io release apart from the
-# added platform/wasm module.
-wr_glyph_rasterizer = { path = "third_party/wr_glyph_rasterizer" }
-# wasip2 port: surfman has no wasm backend (no display server, no GL driver,
-# no wasi-gpu). Vendored with a null backend so the crate compiles; it never
-# opens a device. The port rasterizes on the CPU via vello_cpu instead.
-surfman = { path = "third_party/surfman" }
-# wasip2 port: upstream cfg bug — `impl Imsz for Stdin` delegates to
-# `impl Imsz for &Stdin`, which is gated to unix/windows only, so the call
-# resolves back to itself on wasm. One-line cfg fix.
-imsz = { path = "third_party/imsz" }
-# wasip2 port: WebRender spawns three OS threads (scene builder, low-priority
-# scene builder, render backend) and a rayon pool. Vendored so those can
-# become tasks on the shared runtime.
-webrender = { path = "third_party/webrender" }
-webrender_api = { path = "third_party/webrender_api" }
-
-# wasip2 port: ipc-channel 0.22.0 vendored so the global router loop can run as a
-# task instead of a thread (see third_party/ipc-channel/src/router.rs).
-ipc-channel = { path = "third_party/ipc-channel" }
-
-# wasip2 port: freetype-sys vendored so its bundled build can skip libpng, which
-# needs a zlib that wasi-sysroot does not have. FreeType itself needs no changes.
-freetype-sys = { path = "third_party/freetype-sys" }
-
+# wasip2 port. Each of these needs a small change to work on a target without
+# threads or a GPU; the changes live in forks rather than in this tree, so the
+# diff here stays about Servo. Keep this list in sync with the ACT component's
+# Cargo.toml, which repeats it — `[patch]` applies from the workspace being built.
+webrender = { git = "https://github.com/GamePad64/webrender", branch = "wasip2" }
+webrender_api = { git = "https://github.com/GamePad64/webrender", branch = "wasip2" }
+wr_glyph_rasterizer = { git = "https://github.com/GamePad64/webrender", branch = "wasip2" }
+# Same repo, and they have to come from it too: the crates inside webrender
+# depend on these by path, so leaving them on crates.io puts two versions of each
+# in the graph and the trait impls stop matching.
+wr_malloc_size_of = { git = "https://github.com/GamePad64/webrender", branch = "wasip2" }
+webrender_build = { git = "https://github.com/GamePad64/webrender", branch = "wasip2" }
+ipc-channel = { git = "https://github.com/GamePad64/ipc-channel", branch = "wasip2" }
+surfman = { git = "https://github.com/GamePad64/surfman", branch = "wasip2" }
+imsz = { git = "https://github.com/GamePad64/imsz", branch = "wasip2" }
+freetype-sys = { git = "https://github.com/GamePad64/freetype-sys", branch = "wasip2" }
 
 # For WebRender:
 #

@@ -2834,6 +2834,7 @@ dependencies = [
 [[package]]
 name = "freetype-sys"
 version = "0.23.0"
+source = "git+https://github.com/GamePad64/freetype-sys?branch=wasip2#94b2fd7556cce8abe96064e21df459ae2b426aab"
 dependencies = [
  "cc",
  "libz-sys",
@@ -4514,6 +4515,7 @@ checksum = "89194689a993ab15268672e99e7b0e19da2da3268ac682e8f02d29d4d1434cd7"
 [[package]]
 name = "imsz"
 version = "0.4.1"
+source = "git+https://github.com/GamePad64/imsz?branch=wasip2#f6fbf4bdeea04c8f3c429b7218d45117f19a7eb9"
 
 [[package]]
 name = "indexmap"
@@ -4580,6 +4582,7 @@ dependencies = [
 [[package]]
 name = "ipc-channel"
 version = "0.22.0"
+source = "git+https://github.com/GamePad64/ipc-channel?branch=wasip2#d8980af05e19883f3eeccec455de78f7a58779d5"
 dependencies = [
  "crossbeam-channel",
  "libc",
@@ -6346,8 +6349,7 @@ checksum = "c5a797f0e07bdf071d15742978fc3128ec6c22891c31a3a931513263904c982a"
 [[package]]
 name = "peek-poke"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef60922033e31835f6cf98b9b81b58368037b71d2a81928985cd9d0b3b3171fb"
+source = "git+https://github.com/GamePad64/webrender?branch=wasip2#ccd335614cf68721d57c9f4a85ad18e8986c49a8"
 dependencies = [
  "euclid",
  "peek-poke-derive",
@@ -6356,8 +6358,7 @@ dependencies = [
 [[package]]
 name = "peek-poke-derive"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "271f78bae1e699b58c180a384a2e8d78ccbb60b853e15db92339725f3a2764d5"
+source = "git+https://github.com/GamePad64/webrender?branch=wasip2#ccd335614cf68721d57c9f4a85ad18e8986c49a8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -8448,7 +8449,7 @@ dependencies = [
  "uuid",
  "webrender",
  "webrender_api",
- "wr_malloc_size_of",
+ "wr_malloc_size_of 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -8841,7 +8842,7 @@ dependencies = [
  "tracing",
  "webrender",
  "webrender_api",
- "wr_malloc_size_of",
+ "wr_malloc_size_of 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -10032,6 +10033,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "surfman"
 version = "0.13.0"
+source = "git+https://github.com/GamePad64/surfman?branch=wasip2#9f64ca23818e54709aadea8c8a51c1399ab8681d"
 dependencies = [
  "bitflags 2.13.0",
  "cfg_aliases",
@@ -10088,7 +10090,7 @@ dependencies = [
  "cc",
  "gleam",
  "glsl-to-cxx",
- "webrender_build",
+ "webrender_build 0.70.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -11190,17 +11192,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasip2-shell"
-version = "0.4.0"
-dependencies = [
- "euclid",
- "log",
- "servo",
- "servo-default-resources",
- "tokio",
-]
-
-[[package]]
 name = "wasip3"
 version = "0.4.0+wasi-0.3.0-rc-2026-01-06"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11480,6 +11471,7 @@ dependencies = [
 [[package]]
 name = "webrender"
 version = "0.70.0"
+source = "git+https://github.com/GamePad64/webrender?branch=wasip2#ccd335614cf68721d57c9f4a85ad18e8986c49a8"
 dependencies = [
  "allocator-api2",
  "bincode",
@@ -11507,15 +11499,16 @@ dependencies = [
  "topological-sort",
  "tracy-rs",
  "webrender_api",
- "webrender_build",
+ "webrender_build 0.70.0 (git+https://github.com/GamePad64/webrender?branch=wasip2)",
  "wr_glyph_rasterizer",
- "wr_malloc_size_of",
+ "wr_malloc_size_of 0.2.2 (git+https://github.com/GamePad64/webrender?branch=wasip2)",
  "zeitstempel",
 ]
 
 [[package]]
 name = "webrender_api"
 version = "0.70.0"
+source = "git+https://github.com/GamePad64/webrender?branch=wasip2#ccd335614cf68721d57c9f4a85ad18e8986c49a8"
 dependencies = [
  "app_units",
  "bitflags 2.13.0",
@@ -11527,7 +11520,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_derive",
- "wr_malloc_size_of",
+ "wr_malloc_size_of 0.2.2 (git+https://github.com/GamePad64/webrender?branch=wasip2)",
  "zeitstempel",
 ]
 
@@ -11536,6 +11529,15 @@ name = "webrender_build"
 version = "0.70.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "674538885dba825ee1ddda72ade941fef81364cb843bbb0452fe7d134068ed89"
+dependencies = [
+ "bitflags 2.13.0",
+ "lazy_static",
+]
+
+[[package]]
+name = "webrender_build"
+version = "0.70.0"
+source = "git+https://github.com/GamePad64/webrender?branch=wasip2#ccd335614cf68721d57c9f4a85ad18e8986c49a8"
 dependencies = [
  "bitflags 2.13.0",
  "lazy_static",
@@ -12351,6 +12353,7 @@ dependencies = [
 [[package]]
 name = "wr_glyph_rasterizer"
 version = "0.70.0"
+source = "git+https://github.com/GamePad64/webrender?branch=wasip2#ccd335614cf68721d57c9f4a85ad18e8986c49a8"
 dependencies = [
  "core-foundation 0.9.4",
  "core-graphics",
@@ -12369,7 +12372,7 @@ dependencies = [
  "smallvec",
  "tracy-rs",
  "webrender_api",
- "wr_malloc_size_of",
+ "wr_malloc_size_of 0.2.2 (git+https://github.com/GamePad64/webrender?branch=wasip2)",
 ]
 
 [[package]]
@@ -12377,6 +12380,15 @@ name = "wr_malloc_size_of"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "482308b684f11723b200a32808094bb460b5ac4840903ccbcb78ad92a6354a1f"
+dependencies = [
+ "app_units",
+ "euclid",
+]
+
+[[package]]
+name = "wr_malloc_size_of"
+version = "0.2.2"
+source = "git+https://github.com/GamePad64/webrender?branch=wasip2#ccd335614cf68721d57c9f4a85ad18e8986c49a8"
 dependencies = [
  "app_units",
  "euclid",
