@@ -329,6 +329,37 @@ pub(crate) async fn start_websocket(
         .port_or_known_default()
         .ok_or_else(|| Error::Url(UrlError::UnableToConnect("Unknown port".into())))?;
 
+    // wasip2: connecting by *name* resolves through tokio's blocking pool, and a
+    // pool thread cannot be created here. wasi-libc's `getaddrinfo` reaches
+    // `wasi:sockets/ip-name-lookup` without one, so resolve inline and connect
+    // to an address instead.
+    #[cfg(target_family = "wasm")]
+    let try_socket = {
+        use std::net::ToSocketAddrs;
+
+        let host = domain.to_string();
+        match (host.as_str(), port).to_socket_addrs() {
+            Ok(addresses) => {
+                let mut last = std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("{host} resolved to no addresses"),
+                );
+                let mut socket = Err(());
+                for address in addresses {
+                    match TcpStream::connect(address).await {
+                        Ok(stream) => {
+                            socket = Ok(stream);
+                            break;
+                        },
+                        Err(error) => last = error,
+                    }
+                }
+                socket.map_err(|()| last)
+            },
+            Err(error) => Err(error),
+        }
+    };
+    #[cfg(not(target_family = "wasm"))]
     let try_socket = TcpStream::connect((&*domain.to_string(), port)).await;
     let socket = try_socket.map_err(Error::Io)?;
     let connector = TlsConnector::from(Arc::new(tls_config));

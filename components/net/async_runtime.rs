@@ -26,10 +26,11 @@ impl AsyncRuntimeHolder {
 
 impl AsyncRuntime for AsyncRuntimeHolder {
     fn shutdown(&mut self) {
-        self.runtime
-            .take()
-            .expect("Runtime should have been initialized on start-up.")
-            .shutdown_timeout(Duration::from_millis(100))
+        // On wasip2 there is no runtime of our own to shut down: we borrow the
+        // embedder's. See `init_async_runtime`.
+        if let Some(runtime) = self.runtime.take() {
+            runtime.shutdown_timeout(Duration::from_millis(100))
+        }
     }
 }
 
@@ -38,15 +39,17 @@ impl AsyncRuntime for AsyncRuntimeHolder {
 static ASYNC_RUNTIME_HANDLE: OnceLock<Handle> = OnceLock::new();
 
 pub fn init_async_runtime() -> Box<dyn AsyncRuntime> {
-    // wasip2: there is one thread, so a worker pool cannot be created — the
-    // multi-threaded scheduler spawns its workers eagerly and fails at run time.
-    // The current-thread scheduler is the only shape available, and it is the
-    // same one the whole port runs on.
+    // wasip2: there is one thread, and exactly one runtime — the one the
+    // embedder is already driving. Building a second `current_thread` runtime
+    // here compiles and accepts spawns, but nothing ever polls it, so every
+    // fetch would be queued and never run. Borrow the running runtime instead.
     #[cfg(target_family = "wasm")]
-    let runtime = Builder::new_current_thread()
-        .enable_time()
-        .build()
-        .expect("Unable to build tokio-runtime runtime");
+    {
+        ASYNC_RUNTIME_HANDLE
+            .set(Handle::current())
+            .expect("Runtime handle should be initialized once on start-up");
+        return Box::new(AsyncRuntimeHolder { runtime: None });
+    }
 
     // Initialize a tokio runtime.
     #[cfg(not(target_family = "wasm"))]
@@ -68,11 +71,13 @@ pub fn init_async_runtime() -> Box<dyn AsyncRuntime> {
         .expect("Unable to build tokio-runtime runtime");
 
     // Make the runtime available to users inside this crate.
+    #[cfg(not(target_family = "wasm"))]
     ASYNC_RUNTIME_HANDLE
         .set(runtime.handle().clone())
         .expect("Runtime handle should be initialized once on start-up");
 
     // Return an async runtime for use in shutdown.
+    #[cfg(not(target_family = "wasm"))]
     Box::new(AsyncRuntimeHolder::new(runtime))
 }
 

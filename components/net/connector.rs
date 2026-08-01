@@ -42,17 +42,85 @@ pub const ALPN_H2: &str = "h2";
 
 #[derive(Clone)]
 pub struct ServoHttpConnector {
+    #[cfg(not(target_family = "wasm"))]
     inner: HyperHttpConnector,
+    /// How long a single TCP connect may take.
+    ///
+    /// Held here on wasip2 because there is no `HttpConnector` to hold it — see
+    /// [`connect_over_wasi_sockets`].
+    #[cfg(target_family = "wasm")]
+    connect_timeout: Duration,
 }
 
 impl ServoHttpConnector {
     fn new() -> ServoHttpConnector {
-        let mut inner = HyperHttpConnector::new();
-        inner.enforce_http(false);
-        inner.set_happy_eyeballs_timeout(None);
-        inner.set_connect_timeout(Some(Duration::from_secs(pref!(network_connection_timeout))));
-        ServoHttpConnector { inner }
+        #[cfg(target_family = "wasm")]
+        return ServoHttpConnector {
+            connect_timeout: Duration::from_secs(pref!(network_connection_timeout)),
+        };
+
+        #[cfg(not(target_family = "wasm"))]
+        {
+            let mut inner = HyperHttpConnector::new();
+            inner.enforce_http(false);
+            inner.set_happy_eyeballs_timeout(None);
+            inner
+                .set_connect_timeout(Some(Duration::from_secs(pref!(network_connection_timeout))));
+            ServoHttpConnector { inner }
+        }
     }
+}
+
+/// Open a TCP connection to `dest`.
+///
+/// hyper-util's `HttpConnector` cannot be used on wasip2: its resolver is
+/// `GaiResolver`, which hands every lookup to tokio's blocking pool, and a pool
+/// thread cannot be created here (`thread::spawn` fails at run time with
+/// `os error 58`). wasi-libc resolves through `wasi:sockets/ip-name-lookup`
+/// without needing a thread, so the lookup happens inline and
+/// `tokio::net::TcpStream` — which does have a wasip2 backend — does the rest.
+#[cfg(target_family = "wasm")]
+async fn connect_over_wasi_sockets(
+    dest: Destination,
+    connect_timeout: Duration,
+) -> Result<TokioIo<TcpStream>, ConnectionError> {
+    use std::net::ToSocketAddrs;
+
+    let host = dest
+        .host()
+        .ok_or_else(|| ConnectionError::HttpError("URL has no host".to_owned()))?;
+    // An IPv6 literal arrives bracketed; `to_socket_addrs` wants it bare.
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    let port = dest.port_u16().unwrap_or(match dest.scheme_str() {
+        Some("https") => 443,
+        _ => 80,
+    });
+
+    let addresses = (host, port)
+        .to_socket_addrs()
+        .map_err(|error| ConnectionError::HttpError(format!("could not resolve {host}: {error}")))?
+        .collect::<Vec<_>>();
+    if addresses.is_empty() {
+        return Err(ConnectionError::HttpError(format!(
+            "{host} resolved to no addresses"
+        )));
+    }
+
+    // Try each address in turn rather than racing them: happy eyeballs would
+    // need concurrent connects, and Servo disables it on the native path anyway.
+    log::debug!("wasi:sockets connect: {host}:{port} resolved to {addresses:?}");
+    let mut last_error = None;
+    for address in addresses {
+        match tokio::time::timeout(connect_timeout, TcpStream::connect(address)).await {
+            Ok(Ok(stream)) => return Ok(TokioIo::new(stream)),
+            Ok(Err(error)) => last_error = Some(format!("{address}: {error}")),
+            Err(_) => last_error = Some(format!("{address}: timed out")),
+        }
+    }
+    Err(ConnectionError::HttpError(format!(
+        "could not connect to {host}:{port} ({})",
+        last_error.unwrap_or_else(|| "no addresses tried".to_owned())
+    )))
 }
 
 impl Service<Destination> for ServoHttpConnector {
@@ -84,6 +152,13 @@ impl Service<Destination> for ServoHttpConnector {
             }
         }
 
+        #[cfg(target_family = "wasm")]
+        {
+            let connect_timeout = self.connect_timeout;
+            return Box::pin(connect_over_wasi_sockets(new_dest, connect_timeout));
+        }
+
+        #[cfg(not(target_family = "wasm"))]
         Box::pin(
             self.inner
                 .call(new_dest)
