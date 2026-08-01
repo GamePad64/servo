@@ -4,6 +4,8 @@
 
 use malloc_size_of_derive::MallocSizeOf;
 pub use platform::LocalFontIdentifier;
+#[cfg(target_family = "wasm")]
+pub use platform::{BUILTIN_FONTS, builtin_font_data};
 use serde::{Deserialize, Serialize};
 use servo_url::ServoUrl;
 use uuid::Uuid;
@@ -109,6 +111,40 @@ mod platform {
 
     use crate::{FontData, FontDataAndIndex};
 
+    /// Faces compiled into the component.
+    ///
+    /// A wasm guest has no system font database and may have no readable
+    /// filesystem either, so a build that has to render text must carry its own
+    /// faces. They are addressed by a `builtin:` path, which
+    /// [`LocalFontIdentifier::font_data_and_index`] resolves directly.
+    ///
+    /// DejaVu, under the Bitstream Vera licence — see `builtin/LICENSE`.
+    pub const BUILTIN_FONTS: &[(&str, &str, &[u8])] = &[
+        (
+            "DejaVu Sans",
+            "builtin:DejaVuSans",
+            include_bytes!("builtin/DejaVuSans.ttf"),
+        ),
+        (
+            "DejaVu Serif",
+            "builtin:DejaVuSerif",
+            include_bytes!("builtin/DejaVuSerif.ttf"),
+        ),
+        (
+            "DejaVu Sans Mono",
+            "builtin:DejaVuSansMono",
+            include_bytes!("builtin/DejaVuSansMono.ttf"),
+        ),
+    ];
+
+    /// The bytes behind a `builtin:` path, if it names one.
+    pub fn builtin_font_data(path: &str) -> Option<&'static [u8]> {
+        BUILTIN_FONTS
+            .iter()
+            .find(|(_, builtin_path, _)| *builtin_path == path)
+            .map(|(_, _, data)| *data)
+    }
+
     /// An identifier for a font reachable through the guest's filesystem.
     #[derive(Clone, Debug, Deserialize, Eq, Hash, MallocSizeOf, PartialEq, Serialize)]
     pub struct LocalFontIdentifier {
@@ -139,6 +175,15 @@ mod platform {
         }
 
         pub fn font_data_and_index(&self) -> Option<FontDataAndIndex> {
+            // A face carried inside the component resolves without touching the
+            // filesystem — there may not be one.
+            if let Some(bytes) = builtin_font_data(&self.path) {
+                return Some(FontDataAndIndex {
+                    data: FontData::from_bytes(bytes),
+                    index: 0,
+                });
+            }
+
             // No mmap under WASI: read the whole face. Font files are small
             // relative to a component's memory budget.
             let bytes = std::fs::read(Path::new(&*self.path)).ok()?;

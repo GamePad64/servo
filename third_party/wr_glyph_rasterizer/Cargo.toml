@@ -143,3 +143,7 @@ version = "0.2"
 
 [target.'cfg(target_os = "windows")'.dependencies.dwrote]
 version = "0.11.5"
+
+# wasip2: pure-Rust face parsing and outline filling. No FreeType, no dlsym.
+[target.'cfg(target_family = "wasm")'.dependencies]
+ab_glyph = "0.2"
