@@ -132,7 +132,7 @@ impl GlyphRasterizer {
         if let Some(thread) = &self.dedicated_thread {
             let tx = self.glyph_tx.clone();
             let _ = thread.tx.send(GlyphRasterMsg::Rasterize { font, glyphs, can_use_r8_format, tx });
-        } else if self.enable_multithreading && use_workers {
+        } else if cfg!(not(target_family = "wasm")) && self.enable_multithreading && use_workers {
             // spawn an async task to get off of the render backend thread as early as
             // possible and in that task use rayon's fork join dispatch to rasterize the
             // glyphs in the thread pool.
@@ -1462,6 +1462,18 @@ pub trait AsyncForEach<T> {
 
 impl AsyncForEach<FontContext> for Arc<FontContexts> {
     fn async_for_each<F: Fn(MutexGuard<FontContext>) + Send + 'static>(&self, f: F) {
+        // wasip2: the worker pool has no threads, so the closure spawned below
+        // would never run and the wait at the end would never be signalled.
+        // There is nothing to move off "the main thread" when there is only one:
+        // lock each context and run the closure here.
+        #[cfg(target_family = "wasm")]
+        {
+            for index in 0..self.num_worker_contexts() {
+                f(self.lock_context(index));
+            }
+            return;
+        }
+
         // Reset the locked condition.
         let mut locked = self.locked_mutex.lock().unwrap();
         *locked = false;

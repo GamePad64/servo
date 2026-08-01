@@ -5,56 +5,68 @@
 //! System font enumeration for `wasm32-wasip2`.
 //!
 //! There is no system font database inside a wasm guest: no fontconfig, no
-//! CoreText collection, no DirectWrite. Enumeration therefore yields nothing and
-//! the callbacks are simply never invoked — which is a truthful answer, not a
-//! failure.
+//! CoreText collection, no DirectWrite. The families below are the faces
+//! compiled into the component itself (see [`BUILTIN_FONTS`]); without them a
+//! page of text has nothing to shape against and renders blank.
 //!
-//! Fonts still reach a wasm build, just by a different route: embedded in the
-//! component, or read from a preopened directory as a web font. Those paths go
-//! through `FontIdentifier::Web`/`ArrayBuffer` and never consult this module.
+//! Fonts can still arrive by the other routes a wasm build supports — a web
+//! font, or a face read from a preopened directory. Those go through
+//! `FontIdentifier::Web`/`ArrayBuffer` and never consult this module.
 
-use fonts_traits::FontTemplate;
+use fonts_traits::{BUILTIN_FONTS, FontIdentifier, FontTemplate, FontTemplateDescriptor, LocalFontIdentifier};
+use style::Atom;
 use style::values::computed::font::GenericFontFamily;
 
 use crate::{FallbackFontSelectionOptions, LowercaseFontFamilyName};
 
-/// Enumerate installed font families. There are none.
-pub(crate) fn for_each_available_family<F>(_callback: F)
+/// Enumerate installed font families: the ones carried by the component.
+pub(crate) fn for_each_available_family<F>(mut callback: F)
 where
     F: FnMut(String),
 {
+    for (family, _, _) in BUILTIN_FONTS {
+        callback((*family).to_owned());
+    }
 }
 
-/// Enumerate the faces of an installed family. There are none.
-pub(crate) fn for_each_variation<F>(_family_name: &str, _callback: F)
+/// Enumerate the faces of a family. Each built-in family has exactly one face.
+pub(crate) fn for_each_variation<F>(family_name: &str, mut callback: F)
 where
     F: FnMut(FontTemplate),
 {
+    for (family, path, _) in BUILTIN_FONTS {
+        if !family.eq_ignore_ascii_case(family_name) {
+            continue;
+        }
+        callback(FontTemplate::new(
+            FontIdentifier::Local(LocalFontIdentifier {
+                path: Atom::from(*path),
+                face_index: 0,
+                named_instance_index: 0,
+            }),
+            FontTemplateDescriptor::default(),
+            None,
+        ));
+    }
 }
 
 /// Fallback families to try when a character has no glyph in the requested font.
-///
-/// Empty: naming families that are certain not to be installed would only add
-/// failed lookups.
 pub fn fallback_font_families(_options: FallbackFontSelectionOptions) -> Vec<&'static str> {
-    Vec::new()
+    vec!["DejaVu Sans"]
 }
 
-/// The family name backing each CSS generic.
-///
-/// Nothing is installed, so these are names rather than resolvable families.
-/// They are returned anyway because callers use them as map keys and expect a
-/// stable, distinct name per generic.
+/// The family name backing each CSS generic, mapped onto what is built in.
 pub(crate) fn default_system_generic_font_family(
     generic: GenericFontFamily,
 ) -> LowercaseFontFamilyName {
     match generic {
-        GenericFontFamily::None | GenericFontFamily::Serif => "serif",
-        GenericFontFamily::SansSerif => "sans-serif",
-        GenericFontFamily::Monospace => "monospace",
-        GenericFontFamily::Cursive => "cursive",
-        GenericFontFamily::Fantasy => "fantasy",
-        GenericFontFamily::SystemUi => "system-ui",
+        GenericFontFamily::Serif => "DejaVu Serif",
+        GenericFontFamily::Monospace => "DejaVu Sans Mono",
+        GenericFontFamily::None |
+        GenericFontFamily::SansSerif |
+        GenericFontFamily::Cursive |
+        GenericFontFamily::Fantasy |
+        GenericFontFamily::SystemUi => "DejaVu Sans",
     }
     .into()
 }

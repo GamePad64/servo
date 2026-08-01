@@ -59,6 +59,27 @@ struct FontTemplateCacheKey {
     family_descriptor: SingleFontFamily,
 }
 
+/// wasip2: a direct entry point into the running [`SystemFontService`].
+///
+/// Every Servo actor shares a single thread here, so a proxy round-trip cannot
+/// be answered: the service that would answer it is a task, and a task only
+/// runs when the caller yields — which layout, synchronous from start to
+/// finish, never does. The service therefore registers a direct entry point,
+/// and a "send" below becomes a call that has already answered by the time
+/// `recv` is reached.
+#[cfg(target_family = "wasm")]
+thread_local! {
+    static INLINE_DISPATCH: std::cell::RefCell<
+        Option<std::rc::Rc<dyn Fn(SystemFontServiceMessage)>>,
+    > = const { std::cell::RefCell::new(None) };
+}
+
+/// Install the inline dispatcher. See [`INLINE_DISPATCH`].
+#[cfg(target_family = "wasm")]
+pub fn set_inline_dispatch(dispatch: std::rc::Rc<dyn Fn(SystemFontServiceMessage)>) {
+    INLINE_DISPATCH.with(|slot| *slot.borrow_mut() = Some(dispatch));
+}
+
 /// The public interface to the [`SystemFontService`], used by per-Document
 /// `FontContext` instances.
 #[derive(Debug, MallocSizeOf)]
@@ -68,10 +89,25 @@ pub struct SystemFontServiceProxy {
 }
 
 impl SystemFontServiceProxy {
+    /// Deliver a message to the service.
+    ///
+    /// A channel send, except on wasip2 once the service has registered an
+    /// inline dispatcher — see [`INLINE_DISPATCH`].
+    fn dispatch(&self, message: SystemFontServiceMessage) -> Result<(), ()> {
+        #[cfg(target_family = "wasm")]
+        {
+            let inline = INLINE_DISPATCH.with(|slot| slot.borrow().clone());
+            if let Some(inline) = inline {
+                inline(message);
+                return Ok(());
+            }
+        }
+        self.sender.send(message).map_err(|_| ())
+    }
+
     pub fn exit(&self) {
         let (response_chan, response_port) = generic_channel::channel().unwrap();
-        self.sender
-            .send(SystemFontServiceMessage::Exit(response_chan))
+        self.dispatch(SystemFontServiceMessage::Exit(response_chan))
             .expect("Couldn't send SystemFontService exit message");
         response_port
             .recv()
@@ -92,16 +128,15 @@ impl SystemFontServiceProxy {
     ) -> FontInstanceKey {
         let (response_chan, response_port) =
             generic_channel::channel().expect("failed to create IPC channel");
-        self.sender
-            .send(SystemFontServiceMessage::GetFontInstance(
-                painter_id,
-                identifier,
-                size,
-                flags,
-                variations,
-                response_chan,
-            ))
-            .expect("failed to send message to system font service");
+        self.dispatch(SystemFontServiceMessage::GetFontInstance(
+            painter_id,
+            identifier,
+            size,
+            flags,
+            variations,
+            response_chan,
+        ))
+        .expect("failed to send message to system font service");
 
         let instance_key = response_port.recv();
         if instance_key.is_err() {
@@ -135,13 +170,12 @@ impl SystemFontServiceProxy {
 
         let (response_chan, response_port) =
             generic_channel::channel().expect("failed to create IPC channel");
-        self.sender
-            .send(SystemFontServiceMessage::GetFontTemplates(
-                descriptor_to_match.cloned(),
-                family_descriptor.clone(),
-                response_chan,
-            ))
-            .expect("failed to send message to system font service");
+        self.dispatch(SystemFontServiceMessage::GetFontTemplates(
+            descriptor_to_match.cloned(),
+            family_descriptor.clone(),
+            response_chan,
+        ))
+        .expect("failed to send message to system font service");
 
         let Ok(templates) = response_port.recv() else {
             let font_thread_has_closed = self.sender.send(SystemFontServiceMessage::Ping).is_err();
@@ -161,12 +195,11 @@ impl SystemFontServiceProxy {
     pub fn generate_font_key(&self, painter_id: PainterId) -> FontKey {
         let (result_sender, result_receiver) =
             generic_channel::channel().expect("failed to create IPC channel");
-        self.sender
-            .send(SystemFontServiceMessage::GetFontKey(
-                painter_id,
-                result_sender,
-            ))
-            .expect("failed to send message to system font service");
+        self.dispatch(SystemFontServiceMessage::GetFontKey(
+            painter_id,
+            result_sender,
+        ))
+        .expect("failed to send message to system font service");
         result_receiver
             .recv()
             .expect("Failed to communicate with system font service.")
@@ -175,12 +208,11 @@ impl SystemFontServiceProxy {
     pub fn generate_font_instance_key(&self, painter_id: PainterId) -> FontInstanceKey {
         let (result_sender, result_receiver) =
             generic_channel::channel().expect("failed to create IPC channel");
-        self.sender
-            .send(SystemFontServiceMessage::GetFontInstanceKey(
-                painter_id,
-                result_sender,
-            ))
-            .expect("failed to send message to system font service");
+        self.dispatch(SystemFontServiceMessage::GetFontInstanceKey(
+            painter_id,
+            result_sender,
+        ))
+        .expect("failed to send message to system font service");
         result_receiver
             .recv()
             .expect("Failed to communicate with system font service.")
