@@ -972,22 +972,17 @@ where
     /// dispatch. `select()` there cannot block afterwards, because nothing else
     /// runs on this thread to consume the message in between.
     #[cfg(target_family = "wasm")]
-    async fn await_request_ready(&mut self) {
-        loop {
-            {
-                let mut sel = Select::new();
-                sel.recv(&self.namespace_receiver);
-                sel.recv(&self.script_receiver);
-                sel.recv(&self.background_hang_monitor_receiver);
-                sel.recv(&self.embedder_to_constellation_receiver);
-                self.process_manager.register(&mut sel);
-                let ready = sel.try_ready().is_ok();
-                if ready {
-                    return;
-                }
-            }
-            tokio::task::yield_now().await;
-        }
+    async fn await_request_ready(&self) {
+        servo_base::wasip2::poll_until(|| {
+            let mut sel = Select::new();
+            sel.recv(&self.namespace_receiver);
+            sel.recv(&self.script_receiver);
+            sel.recv(&self.background_hang_monitor_receiver);
+            sel.recv(&self.embedder_to_constellation_receiver);
+            self.process_manager.register(&mut sel);
+            sel.try_ready().ok().map(|_| ())
+        })
+        .await
     }
 
     /// Helper that sends a message to the event loop of a given pipeline, logging the

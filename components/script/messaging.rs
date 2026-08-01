@@ -524,17 +524,15 @@ impl ScriptThreadReceivers {
         timer_scheduler: &TimerScheduler,
         fully_active: &FxHashSet<PipelineId>,
     ) -> MixedMessage {
-        loop {
+        servo_base::wasip2::poll_until(|| {
             if let Some(message) = self.try_recv(task_queue, fully_active) {
-                return message;
+                return Some(message);
             }
-            if let Some(deadline) = timer_scheduler.next_deadline() {
-                if std::time::Instant::now() >= deadline {
-                    return MixedMessage::TimerFired;
-                }
-            }
-            tokio::task::yield_now().await;
-        }
+            // No `select_deadline` here, so a due timer is checked by hand.
+            let deadline = timer_scheduler.next_deadline()?;
+            (std::time::Instant::now() >= deadline).then_some(MixedMessage::TimerFired)
+        })
+        .await
     }
 
     /// Try to receive a from any of the receivers of this [`ScriptThreadReceivers`] or the given

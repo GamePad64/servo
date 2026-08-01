@@ -458,15 +458,12 @@ where
     /// single-threaded design works at all.
     #[cfg(target_family = "wasm")]
     pub async fn recv_async(&self) -> ReceiveResult<T> {
-        loop {
-            match self.try_recv() {
-                Ok(message) => return Ok(message),
-                Err(TryReceiveError::Empty) => {
-                    tokio::task::yield_now().await
-                },
-                Err(TryReceiveError::ReceiveError(error)) => return Err(error),
-            }
-        }
+        crate::wasip2::poll_until(|| match self.try_recv() {
+            Ok(message) => Some(Ok(message)),
+            Err(TryReceiveError::Empty) => None,
+            Err(TryReceiveError::ReceiveError(error)) => Some(Err(error)),
+        })
+        .await
     }
 
     /// Blocks up to the specific duration attempting to receive a message.
