@@ -5,7 +5,6 @@ members = [
     "components/xpath",
     "ffi/capi",
     "ports/servoshell",
-    "ports/act",
     "ports/wasip2",
     "tests/capi",
     "tests/unit/*",
