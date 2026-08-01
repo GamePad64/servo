@@ -5,6 +5,7 @@ members = [
     "components/xpath",
     "ffi/capi",
     "ports/servoshell",
+    "ports/act",
     "ports/wasip2",
     "tests/capi",
     "tests/unit/*",
@@ -277,6 +278,7 @@ warp = "0.4.2"
 web_atoms = "0.2.4"
 webdriver = { version = "0.53.0", default-features = false }
 webpki-roots = "1.0"
+swgl = "0.70"
 webrender = { version = "0.70", features = ["capture"] }
 webrender_api = "0.70"
 wgpu-core = "30"
@@ -454,6 +456,16 @@ surfman = { path = "third_party/surfman" }
 # `impl Imsz for &Stdin`, which is gated to unix/windows only, so the call
 # resolves back to itself on wasm. One-line cfg fix.
 imsz = { path = "third_party/imsz" }
+# wasip2 port: WebRender spawns three OS threads (scene builder, low-priority
+# scene builder, render backend) and a rayon pool. Vendored so those can
+# become tasks on the shared runtime.
+webrender = { path = "third_party/webrender" }
+webrender_api = { path = "third_party/webrender_api" }
+
+# wasip2 port: ipc-channel 0.22.0 vendored so the global router loop can run as a
+# task instead of a thread (see third_party/ipc-channel/src/router.rs).
+ipc-channel = { path = "third_party/ipc-channel" }
+
 
 # For WebRender:
 #
