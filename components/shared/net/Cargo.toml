@@ -56,3 +56,7 @@ webrender_api = { workspace = true }
 
 [dev-dependencies]
 servo-default-resources = { workspace = true }
+
+# wasip2 has no threads: the fetch loop runs as a task instead (see src/lib.rs).
+[target.'cfg(target_family = "wasm")'.dependencies]
+tokio = { workspace = true, features = ["rt"] }

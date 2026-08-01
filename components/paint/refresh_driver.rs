@@ -210,7 +210,6 @@ impl Default for TimerRefreshDriver {
         #[cfg(target_family = "wasm")]
         {
             tokio::task::spawn_local(async move {
-                eprintln!("[actor] refresh_driver start");
                 let mut scheduler = TimerScheduler::default();
                 const POLL_INTERVAL: Duration = Duration::from_millis(1);
 
@@ -230,6 +229,11 @@ impl Default for TimerRefreshDriver {
                             }
                         },
                     }
+                    // Every path above must reach a yield point. Dispatching a
+                    // due timer does not await, and a timer that stays due would
+                    // otherwise spin here forever — starving every other actor on
+                    // this single-threaded runtime.
+                    tokio::task::yield_now().await;
                 }
             });
             return Self { sender };

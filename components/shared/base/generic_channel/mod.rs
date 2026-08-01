@@ -461,7 +461,9 @@ where
         loop {
             match self.try_recv() {
                 Ok(message) => return Ok(message),
-                Err(TryReceiveError::Empty) => tokio::task::yield_now().await,
+                Err(TryReceiveError::Empty) => {
+                    tokio::task::yield_now().await
+                },
                 Err(TryReceiveError::ReceiveError(error)) => return Err(error),
             }
         }

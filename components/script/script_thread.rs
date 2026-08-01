@@ -530,7 +530,6 @@ impl ScriptThreadFactory for ScriptThread {
 
         #[cfg(target_family = "wasm")]
         tokio::task::spawn_local(async move {
-            eprintln!("[actor] script_thread start");
                 profile_traits::debug_event!(
                     "ScriptThread::spawned",
                     script_thread_id = script_thread_id.to_string()

@@ -756,7 +756,6 @@ where
         // driven by `run_async`, which yields instead of blocking on select.
         #[cfg(target_family = "wasm")]
         tokio::task::spawn_local(async move {
-            eprintln!("[actor] constellation start");
             let (script_ipc_sender, script_ipc_receiver) =
                 generic_channel::channel().expect("ipc channel failure");
             let script_receiver = script_ipc_receiver.route_preserving_errors();
@@ -982,7 +981,8 @@ where
                 sel.recv(&self.background_hang_monitor_receiver);
                 sel.recv(&self.embedder_to_constellation_receiver);
                 self.process_manager.register(&mut sel);
-                if sel.try_ready().is_ok() {
+                let ready = sel.try_ready().is_ok();
+                if ready {
                     return;
                 }
             }
