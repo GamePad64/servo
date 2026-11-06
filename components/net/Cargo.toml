@@ -59,7 +59,7 @@ paint_api = { workspace = true }
 parking_lot = { workspace = true }
 pixels = { workspace = true }
 profile_traits = { workspace = true }
-quick_cache = { workspace = true, features = ["ahash"] }
+quick_cache = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }
 resvg = { workspace = true }

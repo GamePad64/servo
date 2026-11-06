@@ -142,9 +142,9 @@ impl MallocSizeOf for HttpCache {
 
 impl Default for HttpCache {
     fn default() -> Self {
-        let size = pref!(network_http_cache_size)
+        let size: usize = pref!(network_http_cache_size)
             .try_into()
-            .expect("http_cache_size needs to fit into u64");
+            .expect("http_cache_size needs to fit into usize");
         Self {
             entries: Cache::new(size),
         }
