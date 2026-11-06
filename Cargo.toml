@@ -247,7 +247,11 @@ syn = { version = "2", default-features = false, features = ["clone-impls", "der
 synstructure = "0.13"
 sys-locale = "0.3"
 taffy = { version = "0.12.1", default-features = false, features = ["calc", "detailed_layout_info", "grid", "std"] }
-tempfile = "3"
+# getrandom default feature off: it would pin getrandom 0.3 into the graph
+# (rand_core 0.9 needs it on other targets), and getrandom 0.3 has no
+# wasm32-wasip3 backend. tempfile falls back to fastrand for name entropy,
+# which is its documented behavior without the feature.
+tempfile = { version = "3", default-features = false }
 tendril = { version = "0.5", features = ["encoding_rs"] }
 tikv-jemalloc-sys = "0.6.1"
 tikv-jemallocator = "0.6.1"
