@@ -541,6 +541,30 @@ impl WebView {
             ))
     }
 
+    /// Load the given URL into this [`WebView`], replacing the current entry in the
+    /// navigation history.
+    ///
+    /// Unlike [`WebView::load`] the previous page is not kept for back-navigation:
+    /// the constellation closes its pipeline as soon as the new one takes over, so
+    /// only one document per [`WebView`] is ever live. For embedders that reuse one
+    /// WebView for a sequence of unrelated documents (scrapers, kiosks) this is the
+    /// difference between flat and ever-growing memory.
+    pub fn load_replace(&self, url: Url) {
+        // Reset synchronously, before the message is even sent: the load
+        // status otherwise stays `Complete` from the *previous* page until
+        // the new document first reports progress, and an embedder waiting
+        // on the status would sail through without waiting at all (the same
+        // reset `reload` does).
+        self.inner_mut().load_status = LoadStatus::Started;
+        self.inner()
+            .servo
+            .constellation_proxy()
+            .send(EmbedderToConstellationMessage::LoadUrlReplace(
+                self.id(),
+                UrlRequest::new(url),
+            ))
+    }
+
     /// Reload the currently loaded page in this [`WebView`].
     pub fn reload(&self) {
         self.inner_mut().load_status = LoadStatus::Started;

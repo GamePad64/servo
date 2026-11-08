@@ -50,6 +50,15 @@ pub enum EmbedderToConstellationMessage {
     AllowNavigationResponse(PipelineId, bool),
     /// Request to load a page, with optionally additional data in [`URLRequest`].
     LoadUrl(WebViewId, UrlRequest),
+    /// Request to load a page replacing the current session history entry.
+    ///
+    /// Unlike [`EmbedderToConstellationMessage::LoadUrl`] (which pushes a new
+    /// entry), the current entry is replaced: the constellation closes the
+    /// previous top-level pipeline immediately instead of keeping it alive in
+    /// the (bounded, but long) session history. Embedders that turn a WebView
+    /// into a sequence of unrelated documents — a scraping page, a kiosk —
+    /// use this so only one document is ever live.
+    LoadUrlReplace(WebViewId, UrlRequest),
     /// Request to traverse the joint session history of the provided browsing context.
     TraverseHistory(WebViewId, TraversalDirection, TraversalId),
     /// Inform the Constellation that a `WebView`'s [`ViewportDetails`] have changed.
