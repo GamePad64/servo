@@ -48,11 +48,6 @@ impl IndexedDBThreadFactory for GenericSender<IndexedDBThreadMsg> {
 
         let manager_sender = chan.clone();
 
-        // wasip2: storage backends are not exercised by a headless parse, and
-        // `thread::spawn` fails at run time there. The channel stays live; its
-        // messages are simply never served, which surfaces to callers as an
-        // unresponsive storage backend rather than an abort.
-        #[cfg(not(target_family = "wasm"))]
         thread::Builder::new()
             .name("IndexedDBManager".to_owned())
             .spawn(move || {

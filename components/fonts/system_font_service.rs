@@ -4,12 +4,6 @@
 
 use std::borrow::ToOwned;
 use std::cell::OnceCell;
-#[cfg(target_family = "wasm")]
-use std::cell::RefCell;
-#[cfg(target_family = "wasm")]
-use std::rc::Rc;
-#[cfg(target_family = "wasm")]
-use servo_base::generic_channel::TryReceiveError;
 use std::collections::HashMap;
 use std::ops::ControlFlow;
 use std::thread;
@@ -93,7 +87,6 @@ impl SystemFontService {
         let (sender, receiver) = generic_channel::channel().unwrap();
         let memory_reporter_sender = sender.clone();
 
-        #[cfg(not(target_family = "wasm"))]
         thread::Builder::new()
             .name("SystemFontService".to_owned())
             .spawn(move || {
@@ -118,48 +111,6 @@ impl SystemFontService {
                 );
             })
             .expect("Thread spawning failed");
-
-        // wasip2: `thread::spawn` fails at run time (os error 58), so the service
-        // runs as a task on the caller's LocalSet instead. It must be a
-        // LocalSet task rather than `tokio::spawn` because the font service is
-        // not `Send`.
-        #[cfg(target_family = "wasm")]
-        {
-            let service = Rc::new(RefCell::new(SystemFontService {
-                port: receiver,
-                local_families: Default::default(),
-                paint_api,
-                webrender_fonts: HashMap::new(),
-                font_instances: HashMap::new(),
-                generic_fonts: Default::default(),
-                free_font_keys: Default::default(),
-                free_font_instance_keys: Default::default(),
-            }));
-            service.borrow_mut().refresh_local_families();
-
-            // Layout queries fonts synchronously and never yields, so it cannot
-            // wait for this service as a task. Answer it by direct call instead.
-            let inline = service.clone();
-            fonts_traits::set_inline_dispatch(Rc::new(
-                move |message| {
-                    inline.borrow_mut().handle_message(message);
-                },
-            ));
-
-            tokio::task::spawn_local(async move {
-                // `run_with_memory_reporting` takes an `FnOnce()`, which cannot
-                // hold the registration across an await point, so the
-                // registration is made directly here.
-                let _registration = memory_profiler_sender.prepare_memory_reporting(
-                    "system-fonts".to_owned(),
-                    memory_reporter_sender,
-                    SystemFontServiceMessage::CollectMemoryReport,
-                );
-                pump(service).await;
-            });
-
-            return SystemFontServiceProxySender(sender);
-        }
 
         SystemFontServiceProxySender(sender)
     }
@@ -225,18 +176,9 @@ impl SystemFontService {
         ControlFlow::Continue(())
     }
 
-    #[cfg(not(target_family = "wasm"))]
     fn run(&mut self) {
         loop {
             let msg = self.port.recv().unwrap();
-            // Top the key pools up *before* dispatching. The sync
-            // `fetch_font_keys_if_needed` inside `handle_message` blocks on a
-            // reply from Paint, which shares this runtime and so cannot answer
-            // while we block; keeping the pools non-empty means it early-returns
-            // instead of ever reaching that `recv`.
-            if let Some(painter_id) = painter_id_of(&msg) {
-                self.fetch_font_keys_if_needed_async(painter_id).await;
-            }
 
             if self.handle_message(msg) == ControlFlow::Break(()) {
                 break;
@@ -436,99 +378,3 @@ impl SystemFontService {
     }
 }
 
-/// Drive the service between synchronous calls.
-///
-/// Two jobs, both of which must happen off the synchronous path: keep every
-/// known painter's key pools stocked, so the inline dispatcher never reaches
-/// the blocking fetch inside `fetch_font_keys_if_needed`; and handle the
-/// messages that still arrive by channel.
-#[cfg(target_family = "wasm")]
-async fn pump(service: Rc<RefCell<SystemFontService>>) {
-    loop {
-        let painters: Vec<PainterId> = service.borrow().free_font_keys.keys().copied().collect();
-        for painter_id in painters {
-            fetch_font_keys_if_needed_async(&service, painter_id).await;
-        }
-
-        let message = service.borrow().port.try_recv();
-        match message {
-            Ok(SystemFontServiceMessage::PrefetchFontKeys(painter_id)) => {
-                // Handled here rather than by `handle_message`: this is what
-                // first stocks a painter's pools, and it has to await.
-                fetch_font_keys_if_needed_async(&service, painter_id).await;
-            },
-            Ok(message) => {
-                if service.borrow_mut().handle_message(message) == ControlFlow::Break(()) {
-                    return;
-                }
-            },
-            Err(TryReceiveError::Empty) => {},
-            Err(_) => return,
-        }
-
-        tokio::task::yield_now().await;
-    }
-}
-
-/// wasip2 twin of [`SystemFontService::fetch_font_keys_if_needed`], awaiting
-/// Paint's reply instead of blocking on it.
-///
-/// Takes the service by handle rather than by `&mut self` so that no borrow is
-/// held across the await — the inline dispatcher borrows the same cell, and it
-/// can run while this is suspended.
-#[cfg(target_family = "wasm")]
-async fn fetch_font_keys_if_needed_async(
-    service: &Rc<RefCell<SystemFontService>>,
-    painter_id: PainterId,
-) {
-    const FREE_FONT_KEYS_BATCH_SIZE: usize = 40;
-    const FREE_FONT_INSTANCE_KEYS_BATCH_SIZE: usize = 40;
-
-    let (font_keys_len, instance_keys_len, paint_api) = {
-        let mut service = service.borrow_mut();
-        let font_keys_len = service.free_font_keys.entry(painter_id).or_default().len();
-        let instance_keys_len = service
-            .free_font_instance_keys
-            .entry(painter_id)
-            .or_default()
-            .len();
-        (font_keys_len, instance_keys_len, service.paint_api.clone())
-    };
-    if font_keys_len != 0 && instance_keys_len != 0 {
-        return;
-    }
-
-    let (mut new_font_keys, mut new_font_instance_keys) = paint_api
-        .fetch_font_keys_async(
-            FREE_FONT_KEYS_BATCH_SIZE - font_keys_len,
-            FREE_FONT_INSTANCE_KEYS_BATCH_SIZE - instance_keys_len,
-            painter_id,
-        )
-        .await;
-
-    let mut service = service.borrow_mut();
-    service
-        .free_font_keys
-        .entry(painter_id)
-        .or_default()
-        .append(&mut new_font_keys);
-    service
-        .free_font_instance_keys
-        .entry(painter_id)
-        .or_default()
-        .append(&mut new_font_instance_keys);
-}
-
-/// The painter a message is addressed to, if it names one.
-///
-/// Used by the wasip2 loop to refill that painter's key pools before dispatch.
-#[cfg(target_family = "wasm")]
-fn painter_id_of(msg: &SystemFontServiceMessage) -> Option<PainterId> {
-    match msg {
-        SystemFontServiceMessage::GetFontInstance(painter_id, ..) |
-        SystemFontServiceMessage::PrefetchFontKeys(painter_id) |
-        SystemFontServiceMessage::GetFontKey(painter_id, ..) |
-        SystemFontServiceMessage::GetFontInstanceKey(painter_id, ..) => Some(*painter_id),
-        _ => None,
-    }
-}

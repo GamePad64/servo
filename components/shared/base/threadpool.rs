@@ -129,13 +129,15 @@ impl ThreadPool {
 
         #[cfg(not(target_family = "wasm"))]
         self.pool.spawn(run);
-        // wasip2 has no pool to hand this to, but it must not run *here*:
-        // callers spawn work that takes locks they are still holding, which on
-        // one thread is a re-entrant lock — and `parking_lot` answers that by
-        // panicking ("Parking not supported on this platform") rather than
-        // deadlocking. Deferring to a task preserves the native ordering.
+        // wasip3 has real threads, but rayon is not part of the wasm
+        // dependency set; a bare thread per work item preserves the native
+        // "not on the caller's stack" ordering that the wasip2 tokio-task
+        // deferral provided.
         #[cfg(target_family = "wasm")]
-        tokio::task::spawn(async move { run() });
+        thread::Builder::new()
+            .name("GlobalPool".to_owned())
+            .spawn(run)
+            .expect("Failed to spawn thread-pool worker");
     }
 
     /// Prevent further work from being spawned,

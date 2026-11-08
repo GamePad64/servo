@@ -31,6 +31,8 @@ pub struct Profiler {
 impl Profiler {
     pub fn create() -> ProfilerChan {
         let (chan, port) = generic_channel::channel().unwrap();
+        #[cfg(target_family = "wasm")]
+        std::mem::forget(port);
 
         if servo_allocator::is_tracking_unmeasured() && std::env::var(LOG_FILE_VAR).is_err() {
             eprintln!("Allocation tracking is enabled but {LOG_FILE_VAR} is unset.");

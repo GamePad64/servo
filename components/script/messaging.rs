@@ -504,36 +504,6 @@ impl ScriptThreadReceivers {
         }
     }
 
-    /// wasip2 twin of [`Self::recv`]: wait for a message without blocking.
-    ///
-    /// `recv` waits on a raw crossbeam `Select`, which parks the thread. Under
-    /// wasip2 the script thread shares that thread with the constellation, the
-    /// resource manager and every other actor, so parking it stops the tasks
-    /// that would produce the awaited message.
-    ///
-    /// Built on the existing `try_recv` so the two cannot disagree about how a
-    /// message is classified. Timer deadlines are honoured explicitly, since
-    /// there is no `select_deadline` to do it.
-    ///
-    /// **Provisional**, like the other `*_async` helpers in this port: a
-    /// cooperative spin rather than a parked task.
-    #[cfg(target_family = "wasm")]
-    pub(crate) async fn recv_async(
-        &self,
-        task_queue: &TaskQueue<MainThreadScriptMsg>,
-        timer_scheduler: &TimerScheduler,
-        fully_active: &FxHashSet<PipelineId>,
-    ) -> MixedMessage {
-        servo_base::wasip2::poll_until(|| {
-            if let Some(message) = self.try_recv(task_queue, fully_active) {
-                return Some(message);
-            }
-            // No `select_deadline` here, so a due timer is checked by hand.
-            let deadline = timer_scheduler.next_deadline()?;
-            (std::time::Instant::now() >= deadline).then_some(MixedMessage::TimerFired)
-        })
-        .await
-    }
 
     /// Try to receive a from any of the receivers of this [`ScriptThreadReceivers`] or the given
     /// [`TaskQueue`]. Return `None` if no messages are ready to be received.

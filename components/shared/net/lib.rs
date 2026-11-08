@@ -7,7 +7,6 @@
 use std::fmt::{self, Debug, Display};
 use std::sync::{LazyLock, OnceLock};
 use std::ops::ControlFlow;
-#[cfg(not(target_family = "wasm"))]
 use std::thread::{self, JoinHandle};
 
 use content_security_policy::{self as csp};
@@ -860,13 +859,7 @@ pub struct FetchThread {
 }
 
 /// What [`FetchThreadHandle`] holds to wait for the fetch loop to finish.
-///
-/// wasip2 has no threads, so the loop is a task on the caller's `LocalSet` and
-/// there is nothing to join. See [`FetchThread::run_async`].
-#[cfg(not(target_family = "wasm"))]
 type FetchLoopHandle = JoinHandle<()>;
-#[cfg(target_family = "wasm")]
-type FetchLoopHandle = ();
 
 impl FetchThread {
     fn spawn() -> FetchThreadHandle {
@@ -878,7 +871,6 @@ impl FetchThread {
             let _ = sender_clone.send(ToFetchThreadMessage::FetchResponse(message));
         })
         .expect("Couldn't create fetch callback");
-        #[cfg(not(target_family = "wasm"))]
         let join_handle = thread::Builder::new()
             .name("FetchThread".to_owned())
             .spawn(move || {
@@ -890,17 +882,6 @@ impl FetchThread {
                 fetch_thread.run();
             })
             .expect("Thread spawning failed");
-        #[cfg(target_family = "wasm")]
-        let join_handle = {
-            tokio::task::spawn_local(async move {
-                let mut fetch_thread = FetchThread {
-                    active_fetches: FxHashMap::default(),
-                    receiver,
-                    to_fetch_sender,
-                };
-                fetch_thread.run_async().await;
-            });
-        };
         FetchThreadHandle {
             sender,
             join_handle: RwLock::new(Some(join_handle)),
@@ -915,29 +896,6 @@ impl FetchThread {
         }
     }
 
-    /// [`run`](Self::run), but as a task rather than a thread.
-    ///
-    /// wasip2 has no threads, so this loop shares one runtime with every other
-    /// Servo actor. A blocking `recv()` would stall all of them, so it polls and
-    /// yields instead.
-    #[cfg(target_family = "wasm")]
-    async fn run_async(&mut self) {
-        loop {
-            let receiver = &self.receiver;
-            let Ok(message) = servo_base::wasip2::poll_until(|| match receiver.try_recv() {
-                Ok(message) => Some(Ok(message)),
-                Err(crossbeam_channel::TryRecvError::Empty) => None,
-                Err(crossbeam_channel::TryRecvError::Disconnected) => Some(Err(())),
-            })
-            .await
-            else {
-                return;
-            };
-            if self.handle_message(message) == ControlFlow::Break(()) {
-                return;
-            }
-        }
-    }
 
     /// Act on one message. [`ControlFlow::Break`] ends the loop.
     fn handle_message(&mut self, message: ToFetchThreadMessage) -> ControlFlow<()> {
@@ -1034,15 +992,10 @@ impl FetchThread {
             return;
         };
         let _ = fetch_thread.sender.send(ToFetchThreadMessage::Exit);
-        #[cfg(not(target_family = "wasm"))]
         if let Some(join_handle) = fetch_thread.join_handle.write().take() {
             join_handle
                 .join()
                 .expect("Failed to join on the FetchThread join handle.");
-        }
-        #[cfg(target_family = "wasm")]
-        {
-            let _ = fetch_thread.join_handle.write().take();
         }
     }
 }

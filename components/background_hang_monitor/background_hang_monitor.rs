@@ -35,22 +35,6 @@ impl HangMonitorRegister {
     ) -> (Box<dyn BackgroundHangMonitorRegister>, Option<JoinHandle<()>>) {
         let (sender, port) = unbounded();
 
-        // wasip2: this watchdog exists to notice a *thread* that stops
-        // responding. There is one thread here, and a component that hangs is
-        // observed from the host side — which is where the watchdog belongs.
-        #[cfg(target_family = "wasm")]
-        {
-            let _ = (&constellation_chan, &control_port, port);
-            return (
-                Box::new(HangMonitorRegister {
-                    sender,
-                    monitoring_enabled,
-                }),
-                None,
-            );
-        }
-
-        #[cfg(not(target_family = "wasm"))]
         let join_handle = Builder::new()
             .name("BackgroundHangMonitor".to_owned())
             .spawn(move || {
@@ -65,7 +49,6 @@ impl HangMonitorRegister {
                 }
             })
             .expect("Couldn't start BHM worker.");
-        #[cfg(not(target_family = "wasm"))]
         return (
             Box::new(HangMonitorRegister {
                 sender,
@@ -152,12 +135,7 @@ impl BackgroundHangMonitorChan {
 
     fn send(&self, msg: MonitoredComponentMsg) {
         let result = self.sender.send((self.component_id.clone(), msg));
-        // wasip2: the monitor thread is never started, so its receiver is closed
-        // and every send fails. That is expected here, not a lost message.
-        #[cfg(not(target_family = "wasm"))]
         result.expect("BHM is gone");
-        #[cfg(target_family = "wasm")]
-        drop(result);
     }
 }
 

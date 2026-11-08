@@ -456,7 +456,6 @@ wr_glyph_rasterizer = { git = "https://github.com/GamePad64/webrender", branch =
 # in the graph and the trait impls stop matching.
 wr_malloc_size_of = { git = "https://github.com/GamePad64/webrender", branch = "wasip2" }
 webrender_build = { git = "https://github.com/GamePad64/webrender", branch = "wasip2" }
-ipc-channel = { git = "https://github.com/GamePad64/ipc-channel", branch = "wasip2" }
 surfman = { git = "https://github.com/GamePad64/surfman", branch = "wasip2" }
 imsz = { git = "https://github.com/GamePad64/imsz", branch = "wasip2" }
 freetype-sys = { git = "https://github.com/GamePad64/freetype-sys", branch = "wasip2" }

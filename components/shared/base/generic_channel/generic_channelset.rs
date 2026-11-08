@@ -183,43 +183,6 @@ enum SelectorInner<'a, T: for<'de> Deserialize<'de>> {
 }
 
 impl<'a, T: Serialize + for<'de> Deserialize<'de>> Selector<'a, T> {
-    /// Wait for a message without blocking the thread — `wasm32-wasip2` only.
-    ///
-    /// The blocking `select()` below is as fatal on a single-threaded runtime as
-    /// a blocking `recv()`: it parks the one thread that every other Servo actor
-    /// needs in order to produce the message being waited for.
-    ///
-    /// This was missed by the initial un-threading census, which counted
-    /// `.recv()` call sites. `resource_thread` blocks here instead and so scored
-    /// zero — see `docs/plans/servo-port-notes.md`.
-    ///
-    /// **Provisional**, for the same reason as `GenericReceiver::recv_async`: it
-    /// spins with cooperative yielding rather than parking the task.
-    #[cfg(target_family = "wasm")]
-    pub async fn select_async(&mut self) -> Vec<GenericSelectionResult<T>> {
-        // `use_ipc()` is false in a wasm guest — a component is a single
-        // process — so this arm is unreachable in practice.
-        if matches!(self.inner, SelectorInner::Ipc(_)) {
-            return self.select();
-        }
-        let SelectorInner::Crossbeam { receivers, sel } = &mut self.inner else {
-            unreachable!("the Ipc case returned above");
-        };
-
-        crate::wasip2::poll_until(|| {
-            let selected = sel.try_select().ok()?;
-            let index = selected.index();
-            Some(vec![match receivers.get(index) {
-                None => GenericSelectionResult::ChannelClosed(index as u64),
-                Some(receiver) => match selected.recv(receiver) {
-                    Ok(Ok(value)) => GenericSelectionResult::MessageReceived(index as u64, value),
-                    Ok(Err(error)) => GenericSelectionResult::Error(error.to_string()),
-                    Err(_) => GenericSelectionResult::ChannelClosed(index as u64),
-                },
-            }])
-        })
-        .await
-    }
 
     /// Block until at least one of the Receivers receives a message.
     ///

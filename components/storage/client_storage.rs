@@ -696,16 +696,17 @@ impl ClientStorageThreadFactory for ClientStorageThreadHandle {
         std::fs::create_dir_all(&storage_dir)
             .expect("Failed to create ClientStorage storage directory");
         let sender_clone = generic_sender.clone();
-        // wasip2: storage backends are not exercised by a headless parse, and
-        // `thread::spawn` fails at run time there. The channel stays live; its
-        // messages are simply never served, which surfaces to callers as an
-        // unresponsive storage backend rather than an abort.
-        #[cfg(not(target_family = "wasm"))]
+        // wasm32-wasip3 builds against the cooperative-threads sysroot, where
+        // `thread::spawn` works: the storage backend runs on a real thread,
+        // same as every other target. (The wasip2 branch kept this arm
+        // `#[cfg]`-off because that sysroot has no threads; this branch does
+        // not build for wasip2.)
+        let temp_dir_guard = temp_dir;
         thread::Builder::new()
             .name("ClientStorageThread".to_owned())
             .spawn(move || {
                 // Keep temp_dir alive while the thread runs.
-                let _ = temp_dir;
+                let _ = temp_dir_guard;
                 let engine = SqliteEngine::new(storage_dir).unwrap_or_else(|error| {
                     warn!("Failed to initialize ClientStorage engine into storage dir: {error:?}");
                     SqliteEngine::memory().unwrap()

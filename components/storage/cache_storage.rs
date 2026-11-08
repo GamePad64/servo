@@ -71,11 +71,6 @@ impl CacheStorageThreadFactory for CacheStorageThreadHandle {
         std::fs::create_dir_all(&storage_dir)
             .expect("Failed to create CacheStorage storage directory");
         let sender_clone = generic_sender.clone();
-        // wasip2: storage backends are not exercised by a headless parse, and
-        // `thread::spawn` fails at run time there. The channel stays live; its
-        // messages are simply never served, which surfaces to callers as an
-        // unresponsive storage backend rather than an abort.
-        #[cfg(not(target_family = "wasm"))]
         thread::Builder::new()
             .name("CacheStorageThread".to_owned())
             .spawn(move || {

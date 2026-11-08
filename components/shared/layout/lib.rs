@@ -19,7 +19,6 @@ use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::AtomicIsize;
-#[cfg(not(target_family = "wasm"))]
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -428,18 +427,10 @@ pub trait Layout {
 /// This trait is part of `layout_api` because it depends on both `script_traits`
 /// and also `LayoutFactory` from this crate. If it was in `script_traits` there would be a
 /// circular dependency.
-/// What creating a script event loop hands back.
-///
-/// Natively this is the OS thread the script thread runs on; the constellation
-/// keeps it to join during shutdown. wasip2 has no threads — the script thread
-/// is a task on the shared `LocalSet` — and a task handle would be misleading,
-/// because the caller cannot block on one either. There is nothing to join, so
-/// the contract yields `()` and the constellation's bookkeeping disappears with
-/// it.
-#[cfg(not(target_family = "wasm"))]
+
+/// What creating a script event loop hands back: the OS thread the script
+/// thread runs on. The constellation keeps it to join during shutdown.
 pub type ScriptEventLoopHandle = JoinHandle<()>;
-#[cfg(target_family = "wasm")]
-pub type ScriptEventLoopHandle = ();
 
 pub trait ScriptThreadFactory {
     /// Create a `ScriptThread`.

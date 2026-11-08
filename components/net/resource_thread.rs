@@ -147,7 +147,6 @@ pub fn new_core_resource_thread(
         revoke_sender,
         refresh_token_sender: refresh_sender,
     }));
-    #[cfg(not(target_family = "wasm"))]
     thread::Builder::new()
         .name("ResourceManager".to_owned())
         .spawn(move || {
@@ -187,48 +186,6 @@ pub fn new_core_resource_thread(
             );
         })
         .expect("Thread spawning failed");
-
-    // wasip2: no threads. The resource manager runs as a LocalSet task; its
-    // select loop awaits instead of blocking so the actors that feed it can run.
-    #[cfg(target_family = "wasm")]
-    tokio::task::spawn_local(async move {
-        let resource_manager = CoreResourceManager::new(
-            devtools_sender,
-            time_profiler_chan,
-            embedder_proxy.clone(),
-            ca_certificates.clone(),
-            ignore_certificate_errors,
-            blob_token_communicator,
-        );
-
-        let mut channel_manager = ResourceChannelManager {
-            resource_manager,
-            config_dir,
-            ca_certificates,
-            ignore_certificate_errors,
-            cancellation_listeners: Default::default(),
-            cookie_listeners: Default::default(),
-        };
-
-        // `run_with_memory_reporting` takes an `FnOnce()` and cannot hold the
-        // registration across an await, so register directly.
-        let _registration = mem_profiler_chan.prepare_memory_reporting(
-            String::from("network-cache-reporter"),
-            report_chan,
-            CoreResourceMsg::CollectMemoryReport,
-        );
-        channel_manager
-            .start_async(
-                public_setup_port,
-                private_setup_port,
-                report_port,
-                revoke_receiver,
-                refresh_receiver,
-                protocols,
-                embedder_proxy,
-            )
-            .await;
-    });
 
     (public_setup_chan, private_setup_chan)
 }
@@ -342,7 +299,6 @@ impl ResourceChannelManager {
         (rx_set, ids, public_http_state, private_http_state)
     }
 
-    #[cfg(not(target_family = "wasm"))]
     fn start(
         &mut self,
         public_receiver: GenericReceiver<CoreResourceMsg>,
@@ -380,51 +336,6 @@ impl ResourceChannelManager {
 
     }
 
-    /// wasip2: identical loop, awaiting instead of blocking. `select()` waits on
-    /// five channels and would stall the single-threaded runtime that the
-    /// senders also live on.
-    #[cfg(target_family = "wasm")]
-    async fn start_async(
-        &mut self,
-        public_receiver: GenericReceiver<CoreResourceMsg>,
-        private_receiver: GenericReceiver<CoreResourceMsg>,
-        memory_reporter: GenericReceiver<CoreResourceMsg>,
-        revoke_receiver: GenericReceiver<CoreResourceMsg>,
-        refresh_receiver: GenericReceiver<CoreResourceMsg>,
-        protocols: Arc<ProtocolRegistry>,
-        embedder_proxy: GenericEmbedderProxy<NetToEmbedderMsg>,
-    ) {
-        let (mut rx_set, ids, public_http_state, private_http_state) = self.setup(
-            public_receiver,
-            private_receiver,
-            memory_reporter,
-            revoke_receiver,
-            refresh_receiver,
-            embedder_proxy,
-        );
-        let mut selector = rx_set.selector();
-
-        loop {
-            for received in selector.select_async().await.into_iter() {
-                if self.handle_selection(
-                    received,
-                    &ids,
-                    &public_http_state,
-                    &private_http_state,
-                    &protocols,
-                ) == ControlFlow::Break(())
-                {
-                    return;
-                }
-            }
-            // A closed channel makes `try_select` return immediately and forever,
-            // so without this the loop would never reach an await point and would
-            // starve every other task on the runtime. Closed channels are normal
-            // here: subsystems the wasm build does not start leave their ends
-            // disconnected.
-            tokio::task::yield_now().await;
-        }
-    }
 
     /// Handle one selection result. Shared by the native and wasm loops so they
     /// cannot drift apart.

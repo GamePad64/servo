@@ -195,7 +195,6 @@ enum TimerThreadMessage {
 /// behave respecting wakeup timeouts -- a bit too much to ask at the moment.
 pub(crate) struct TimerRefreshDriver {
     sender: Sender<TimerThreadMessage>,
-    #[cfg(not(target_family = "wasm"))]
     join_handle: Option<JoinHandle<()>>,
 }
 
@@ -203,43 +202,6 @@ impl Default for TimerRefreshDriver {
     fn default() -> Self {
         let (sender, receiver) = crossbeam_channel::unbounded::<TimerThreadMessage>();
 
-        // wasip2: no threads. The timer scheduler becomes a LocalSet task. It
-        // cannot block on `recv_deadline`, so it polls and sleeps instead — the
-        // sleep bounds both message latency and idle CPU, where a bare
-        // `yield_now` would spin hot whenever the next deadline is far off.
-        #[cfg(target_family = "wasm")]
-        {
-            tokio::task::spawn_local(async move {
-                let mut scheduler = TimerScheduler::default();
-                const POLL_INTERVAL: Duration = Duration::from_millis(1);
-
-                loop {
-                    match receiver.try_recv() {
-                        Ok(TimerThreadMessage::Request(request)) => {
-                            scheduler.schedule_timer(request);
-                        },
-                        Ok(TimerThreadMessage::Quit) => return,
-                        Err(crossbeam_channel::TryRecvError::Disconnected) => return,
-                        Err(crossbeam_channel::TryRecvError::Empty) => {
-                            match scheduler.next_deadline() {
-                                Some(deadline) if Instant::now() >= deadline => {
-                                    scheduler.dispatch_completed_timers()
-                                },
-                                _ => tokio::time::sleep(POLL_INTERVAL).await,
-                            }
-                        },
-                    }
-                    // Every path above must reach a yield point. Dispatching a
-                    // due timer does not await, and a timer that stays due would
-                    // otherwise spin here forever — starving every other actor on
-                    // this single-threaded runtime.
-                    tokio::task::yield_now().await;
-                }
-            });
-            return Self { sender };
-        }
-
-        #[cfg(not(target_family = "wasm"))]
         let join_handle = thread::Builder::new()
             .name(String::from("PaintTimerThread"))
             .spawn(move || {
@@ -263,7 +225,6 @@ impl Default for TimerRefreshDriver {
             })
             .expect("Could not create RefreshDriver timer thread.");
 
-        #[cfg(not(target_family = "wasm"))]
         Self {
             sender,
             join_handle: Some(join_handle),
@@ -292,7 +253,6 @@ impl RefreshDriver for TimerRefreshDriver {
 impl Drop for TimerRefreshDriver {
     fn drop(&mut self) {
         let _ = self.sender.send(TimerThreadMessage::Quit);
-        #[cfg(not(target_family = "wasm"))]
         if let Some(join_handle) = self.join_handle.take() {
             let _ = join_handle.join();
         }

@@ -10,7 +10,6 @@
 //! a more shared crate that has fewer dependents.
 
 #[cfg(target_family = "wasm")]
-pub mod wasip2;
 pub mod cross_process_instant;
 pub mod generic_channel;
 pub mod id;

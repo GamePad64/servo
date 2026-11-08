@@ -52,6 +52,7 @@ mod from_embedder {
                 Self::Exit => target!("Exit"),
                 Self::AllowNavigationResponse(..) => target!("AllowNavigationResponse"),
                 Self::LoadUrl(..) => target!("LoadUrl"),
+                Self::LoadUrlReplace(..) => target!("LoadUrlReplace"),
                 Self::TraverseHistory(..) => target!("TraverseHistory"),
                 Self::ChangeViewportDetails(..) => target!("ChangeViewportDetails"),
                 Self::ThemeChange(..) => target!("ThemeChange"),

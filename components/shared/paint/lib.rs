@@ -520,28 +520,6 @@ impl CrossProcessPaintApi {
         receiver.recv().unwrap()
     }
 
-    /// wasip2 twin of [`fetch_font_keys`](Self::fetch_font_keys).
-    ///
-    /// The reply is produced by Paint, which on wasip2 is a task on the *same*
-    /// runtime as every caller. A blocking `recv` here can therefore never be
-    /// answered: it starves the very actor that would answer it.
-    #[cfg(target_family = "wasm")]
-    pub async fn fetch_font_keys_async(
-        &self,
-        number_of_font_keys: usize,
-        number_of_font_instance_keys: usize,
-        painter_id: PainterId,
-    ) -> (Vec<FontKey>, Vec<FontInstanceKey>) {
-        let (sender, receiver) = generic_channel::channel().expect("Could not create IPC channel");
-        let _ = self.0.send(PaintMessage::GenerateFontKeys(
-            number_of_font_keys,
-            number_of_font_instance_keys,
-            sender,
-            painter_id,
-        ));
-        receiver.recv_async().await.unwrap()
-    }
-
     pub fn viewport(&self, webview_id: WebViewId, description: ViewportDescription) {
         let _ = self.0.send(PaintMessage::Viewport(webview_id, description));
     }

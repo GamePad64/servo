@@ -440,31 +440,6 @@ where
         }
     }
 
-    /// Receive a message without blocking the thread — `wasm32-wasip2` only.
-    ///
-    /// On wasm every Servo actor is a task on a single-threaded tokio runtime,
-    /// because `std::thread::spawn` fails there at run time (`os error 58`). A
-    /// blocking `recv()` inside one of those tasks stalls the entire runtime,
-    /// including whichever actor was going to send the awaited message — a
-    /// deadlock rather than a wait.
-    ///
-    /// This yields to the runtime between polls so the other actors can run.
-    ///
-    /// **Provisional.** It is a spin with cooperative yielding, so it burns CPU
-    /// while idle. The proper fix is a third `GenericReceiverVariants` arm backed
-    /// by `tokio::sync::mpsc`, which parks the task instead. That is a larger
-    /// change — `channel()` and every construction site would have to learn about
-    /// it — and is deliberately deferred until after the G1 gate proves the
-    /// single-threaded design works at all.
-    #[cfg(target_family = "wasm")]
-    pub async fn recv_async(&self) -> ReceiveResult<T> {
-        crate::wasip2::poll_until(|| match self.try_recv() {
-            Ok(message) => Some(Ok(message)),
-            Err(TryReceiveError::Empty) => None,
-            Err(TryReceiveError::ReceiveError(error)) => Some(Err(error)),
-        })
-        .await
-    }
 
     /// Blocks up to the specific duration attempting to receive a message.
     #[inline]
