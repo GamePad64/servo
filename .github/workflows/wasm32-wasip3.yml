@@ -47,6 +47,21 @@ jobs:
           sudo tar -xzf /tmp/wasi-sdk.tar.gz -C /opt/wasi-sdk --strip-components=1
           /opt/wasi-sdk/bin/wasm32-wasip3-clang --version
 
+      # mozjs_sys's build.rs runs bindgen against the HOST libclang to
+      # generate SpiderMonkey bindings, and it points that libclang at
+      # wasi-sdk's libc++ headers (build.rs passes the sysroot include
+      # trees as -isystem). Those headers require Clang >= 21
+      # (`"Libc++ only supports Clang 21 and later"`); ubuntu-24.04's
+      # libclang is far older, so bindgen dies on every libc++ header.
+      # A recent llvm-toolchain provides a new-enough libclang.
+      - name: Install LLVM for bindgen (libclang >= 21)
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-21 main" | sudo tee /etc/apt/sources.list.d/llvm-21.list
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends llvm-21-dev libclang-21-dev clang-21
+          echo "LIBCLANG_PATH=/usr/lib/llvm-21/lib" >> "$GITHUB_ENV"
+
       - name: Install Rust 1.100.0-beta
         uses: dtolnay/rust-toolchain@master
         with:
