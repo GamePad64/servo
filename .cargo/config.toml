@@ -36,6 +36,13 @@ CXX_wasm32-wasip2 = "/opt/wasi-sdk/bin/clang++"
 AR_wasm32-wasip2 = "/opt/wasi-sdk/bin/llvm-ar"
 CFLAGS_wasm32-wasip2 = "--sysroot=/opt/wasi-sdk/share/wasi-sysroot -mllvm -wasm-enable-sjlj -fwasm-exceptions -mllvm -wasm-use-legacy-eh=false -DNDEBUG"
 CXXFLAGS_wasm32-wasip2 = "--sysroot=/opt/wasi-sdk/share/wasi-sysroot -mllvm -wasm-enable-sjlj -fwasm-exceptions -mllvm -wasm-use-legacy-eh=false -DNDEBUG"
+# wasip3 needs target-suffixed wrapper scripts: bare clang defaults to
+# wasip1, and cc-rs callers that drop --target pick up wasip1 headers.
+CC_wasm32-wasip3 = "/opt/wasi-sdk/bin/wasm32-wasip3-clang"
+CXX_wasm32-wasip3 = "/opt/wasi-sdk/bin/wasm32-wasip3-clang++"
+AR_wasm32-wasip3 = "/opt/wasi-sdk/bin/llvm-ar"
+CFLAGS_wasm32-wasip3 = "--sysroot=/opt/wasi-sdk/share/wasi-sysroot -mllvm -wasm-enable-sjlj -fwasm-exceptions -mllvm -wasm-use-legacy-eh=false -DNDEBUG"
+CXXFLAGS_wasm32-wasip3 = "--sysroot=/opt/wasi-sdk/share/wasi-sysroot -mllvm -wasm-enable-sjlj -fwasm-exceptions -mllvm -wasm-use-legacy-eh=false -DNDEBUG"
 MACOSX_DEPLOYMENT_TARGET = "13.0"
 RUSTC_BOOTSTRAP = "crown,script,script_webgpu,script_bindings,style_tests,mozjs,mozjs_sys"
 
@@ -58,5 +65,18 @@ rustflags = [
   "-C", "link-arg=-lc++abi",
   "-C", "link-arg=-lunwind",
   # FreeType is compiled with the wasm SjLj lowering; its runtime lives here.
+  "-C", "link-arg=-lsetjmp",
+]
+
+# --- wasm32-wasip3 port (branches wasip3-port / wasip3-coop-undo) ---
+# Same link set as wasip2, against the wasip3 sysroot layout.
+[target.wasm32-wasip3]
+rustflags = [
+  "--cfg", "tokio_unstable",
+  "-L", "/opt/wasi-sdk/share/wasi-sysroot/lib/wasm32-wasip3",
+  "-L", "/opt/wasi-sdk/share/wasi-sysroot/lib/wasm32-wasip3/eh",
+  "-C", "link-arg=-lc++",
+  "-C", "link-arg=-lc++abi",
+  "-C", "link-arg=-lunwind",
   "-C", "link-arg=-lsetjmp",
 ]
