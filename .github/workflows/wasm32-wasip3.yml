@@ -58,7 +58,10 @@ jobs:
       # and multilib layout it is asked to parse (also satisfies the
       # headers' `Clang >= 21` requirement).
       - name: Point bindgen at wasi-sdk's libclang
-        run: echo "LIBCLANG_PATH=/opt/wasi-sdk/lib" >> "$GITHUB_ENV"
+        run: |
+          echo "LIBCLANG_PATH=/opt/wasi-sdk/lib" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=/opt/wasi-sdk/lib" >> "$GITHUB_ENV"
+          ldconfig -p | grep -i libclang || echo "no ldconfig libclang"
 
       - name: Install Rust 1.100.0-beta
         uses: dtolnay/rust-toolchain@master
