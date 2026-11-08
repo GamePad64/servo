@@ -460,6 +460,18 @@ surfman = { git = "https://github.com/GamePad64/surfman", branch = "wasip2" }
 imsz = { git = "https://github.com/GamePad64/imsz", branch = "wasip2" }
 freetype-sys = { git = "https://github.com/GamePad64/freetype-sys", branch = "wasip2" }
 
+# wasip3 port: mozjs_sys builds from source (no wasip3 prebuilt archive);
+# the registry crate hardcodes --target=wasm32-wasip1 and misses the
+# wasip3/wasi-sdk build-system adjustments these branches carry. The mozjs
+# wrapper comes from the same repo: crates.io 0.21.0 pins
+# mozjs_sys = "=140.13.0-0" (patch.unused otherwise); the fork's 0.21.6
+# pins the 140.14.0-0 this branch carries.
+mozjs = { git = "https://github.com/GamePad64/mozjs", branch = "wasip3" }
+mozjs_sys = { git = "https://github.com/GamePad64/mozjs", branch = "wasip3" }
+# The SpiderMonkey-generated headers recurse bindgen's layout pass past its
+# recursion cap; this branch makes the pass fallible and depth-capped.
+bindgen = { git = "https://github.com/GamePad64/rust-bindgen", branch = "wasip3-layout-fix" }
+
 # For WebRender:
 #
 # webrender = { path = "../webrender/webrender" }

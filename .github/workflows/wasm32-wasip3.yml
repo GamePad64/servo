@@ -1,0 +1,69 @@
+name: wasm32-wasip3
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["wasip3-port", "wasip3-coop-undo"]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".cargo/config.toml"
+      - "rust-toolchain.toml"
+      - "components/servo/**"
+      - "components/default-resources/**"
+      - "components/shared/**"
+      - "components/script/**"
+      - "support/**"
+      - ".github/workflows/wasm32-wasip3.yml"
+  pull_request:
+    branches: ["wasip3-port"]
+    paths:
+      - ".github/workflows/wasm32-wasip3.yml"
+
+env:
+  WASI_SDK_PATH: /opt/wasi-sdk
+  # SpiderMonkey builds from source on wasm32-wasip3 (no prebuilt archive
+  # exists for that target); the build needs several minutes and a parallel
+  # make. Full debug build of the engine takes ~25 min from cold.
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: 1
+
+jobs:
+  build-engine:
+    name: Engine builds on wasm32-wasip3
+    # wasm32-wasip3 needs Rust >= 1.100 (target tier: 1.100.0-beta until
+    # stable lands 2026-11-12) and wasi-sdk >= 25 (its sysroot carries the
+    # wasip3 multilib + the coop-threads libc). Keep both in one place.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install wasi-sdk 34
+        run: |
+          curl -sL --retry 3 -o /tmp/wasi-sdk.tar.gz \
+            https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-34/wasi-sdk-34.0-x86_64-linux.tar.gz
+          sudo mkdir -p /opt/wasi-sdk
+          sudo tar -xzf /tmp/wasi-sdk.tar.gz -C /opt/wasi-sdk --strip-components=1
+          /opt/wasi-sdk/bin/wasm32-wasip3-clang --version
+
+      - name: Install Rust 1.100.0-beta
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.100.0-beta
+          targets: wasm32-wasip3
+
+      - name: Cargo cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+
+      # The engine alone (components/servo) is what ACT's scrape component
+      # consumes; default-resources provides the baked-in fonts and prefs.
+      # This mirrors the feature set of the scrape Cargo.toml exactly.
+      - name: Check servo (no default features, js_jit + baked-in-resources)
+        run: cargo +1.100.0-beta check -p servo --no-default-features --features js_jit,baked-in-resources --target wasm32-wasip3
+
+      - name: Check servo-default-resources
+        run: cargo +1.100.0-beta check -p servo-default-resources --target wasm32-wasip3

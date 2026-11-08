@@ -823,8 +823,7 @@ dependencies = [
 [[package]]
 name = "bindgen"
 version = "0.72.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "993776b509cfb49c750f11b8f07a46fa23e0a1386ffc01fb1e7d343efc387895"
+source = "git+https://github.com/GamePad64/rust-bindgen?branch=wasip3-layout-fix#501c8a454f7c3512f4796577d53c50d55219e04c"
 dependencies = [
  "bitflags 2.13.1",
  "cexpr",
@@ -2538,7 +2537,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3105,7 +3104,7 @@ dependencies = [
  "gobject-sys",
  "libc",
  "system-deps",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5266,9 +5265,8 @@ dependencies = [
 
 [[package]]
 name = "mozjs"
-version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a98fbcb42b13894ad89fcab77fef45980679f3b24c93b3d2b823f9f0a899583e"
+version = "0.21.6"
+source = "git+https://github.com/GamePad64/mozjs?branch=wasip3#c19ae32a784d0bd88e6163a484e40a17e96f42e1"
 dependencies = [
  "bindgen",
  "cc",
@@ -5281,9 +5279,8 @@ dependencies = [
 
 [[package]]
 name = "mozjs_sys"
-version = "140.13.0-0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc6e165f0cafe59573217f788efb4c3def70c915c8107abaf89791b7ec56850d"
+version = "140.14.0-0"
+source = "git+https://github.com/GamePad64/mozjs?branch=wasip3#c19ae32a784d0bd88e6163a484e40a17e96f42e1"
 dependencies = [
  "bindgen",
  "cc",
@@ -7377,7 +7374,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -7434,7 +7431,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -10202,10 +10199,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.1",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -11869,7 +11866,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
