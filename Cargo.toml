@@ -458,7 +458,7 @@ wr_malloc_size_of = { git = "https://github.com/GamePad64/webrender", branch = "
 webrender_build = { git = "https://github.com/GamePad64/webrender", branch = "wasip2" }
 surfman = { git = "https://github.com/GamePad64/surfman", branch = "wasip2" }
 imsz = { git = "https://github.com/GamePad64/imsz", branch = "wasip2" }
-freetype-sys = { git = "https://github.com/GamePad64/freetype-sys", branch = "wasip2" }
+freetype-sys = { git = "https://github.com/GamePad64/freetype-sys", branch = "wasip3" }
 
 # wasip3 port: mozjs_sys builds from source (no wasip3 prebuilt archive);
 # the registry crate hardcodes --target=wasm32-wasip1 and misses the
