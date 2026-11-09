@@ -48,19 +48,22 @@ jobs:
           /opt/wasi-sdk/bin/wasm32-wasip3-clang --version
 
       # mozjs_sys's build.rs runs bindgen against the HOST libclang to
-      # generate SpiderMonkey bindings, and it points that libclang at
-      # wasi-sdk's libc++ headers (build.rs passes the multilib include
-      # trees as -isystem). Stock clang has no knowledge of wasi-sdk's
-      # include/wasm32-<triple>/c++/v1 layout and its builtin headers don't
-      # resolve through the sysroot's libc++ stddef.h include_next chain
-      # (bindgen dies on 'stddef.h' file not found), so use the libclang
-      # from wasi-sdk itself — LLVM 23, version-matched to the very headers
-      # and multilib layout it is asked to parse (also satisfies the
-      # headers' `Clang >= 21` requirement).
+      # generate SpiderMonkey bindings, pointing it at wasi-sdk's libc++
+      # include trees (-isystem). libc++'s stddef.h ends in
+      # `#include_next <stddef.h>`, which only resolves through clang's
+      # builtin headers (the resource dir). Unlike the clang *driver*,
+      # libclang parsing via bindgen does not reliably put the resource
+      # dir on the search chain (CI runner: dies at 'stddef.h' file not
+      # found, wasi-sdk/eh stddef.h:39), so build.rs takes
+      # LIBCLANG_RESOURCE_DIR and passes -resource-dir explicitly. Point
+      # everything at wasi-sdk's own LLVM 23: version-matched to the
+      # headers being parsed and satisfies their `Clang >= 21` floor.
       - name: Point bindgen at wasi-sdk's libclang
         run: |
           echo "LIBCLANG_PATH=/opt/wasi-sdk/lib" >> "$GITHUB_ENV"
           echo "LD_LIBRARY_PATH=/opt/wasi-sdk/lib" >> "$GITHUB_ENV"
+          echo "LIBCLANG_RESOURCE_DIR=/opt/wasi-sdk/lib/clang/23" >> "$GITHUB_ENV"
+          ls /opt/wasi-sdk/lib/clang/23/include/stddef.h
           ldconfig -p | grep -i libclang || echo "no ldconfig libclang"
 
       - name: Install Rust 1.100.0-beta
